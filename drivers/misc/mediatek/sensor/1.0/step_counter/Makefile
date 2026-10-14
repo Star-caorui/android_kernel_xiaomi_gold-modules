@@ -19,5 +19,4 @@ obj-$(CONFIG_MTK_SENSOR_SUPPORT)	+= step_counter.o
 obj-$(CONFIG_MTK_STEPSIGNHUB)		+=	stepsignhub/
 
 ifeq ($(CONFIG_CUSTOM_KERNEL_STEP_COUNTER),"OTHER_VENDOR")
-obj-y += other_vendor/
 endif

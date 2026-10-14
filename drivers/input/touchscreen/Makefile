@@ -7,7 +7,6 @@ TOUCH_LISTS := $(subst ",,$(CONFIG_TOUCHSCREEN_MTK_TOUCH))
 obj-y += $(foreach TOUCH,$(TOUCH_LISTS),$(TOUCH)/)
 
 ifneq ($(wildcard $(srctree)/$(src)/k6985v1_64_alpha),)
-obj-$(CONFIG_TOUCHSCREEN_MT6985_ALPHA_SUPPORT) += k6985v1_64_alpha/
 endif
 obj-m   +=  tpd_notify.o
 obj-$(CONFIG_XIAOMI_USB_TOUCH_NOTIFIER) += xiaomi_usb_touch_notifier/

@@ -316,7 +316,6 @@ else ifneq ($(wildcard $(KO_CODE_PATH)/platform/$(MTK_PLATFORM)),)
     mali_kbase_$(MTK_PLATFORM)_r47-y += $(mali_kbase-y) $(mali_kbase-m)
 endif
 
-obj-$(CONFIG_MALI_ARBITRATION) += arbitration/
 obj-$(CONFIG_MALI_KUTF)    += tests/
 
 mali_kbase-y += \
