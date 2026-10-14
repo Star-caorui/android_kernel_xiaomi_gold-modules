@@ -3705,6 +3705,7 @@ static int krtatm_thread(void *arg)
 #endif	/* FAST_RESPONSE_ATM */
 
 /*----------------N85 start--------------*/
+#ifdef CLCTM_TARGET_TJ
 static void init_ctm_param(void)
 {
 	int t_K_SUM_TT_HIGH = CLCTM_TT_HIGH;
@@ -3772,12 +3773,15 @@ static void init_ctm_param(void)
 #endif
 
 }
+#endif /* CLCTM_TARGET_TJ */
 /*-----------------N85 end---------------------*/
 
 int mtk_cooler_atm_init(void)
 {
 	int err = 0;
+#ifdef CLCTM_TARGET_TJ
 	init_ctm_param();
+#endif
 	tscpu_dprintk("%s: start\n", __func__);
 
 	err = apthermolmt_register_user(&ap_atm, ap_atm_log);
