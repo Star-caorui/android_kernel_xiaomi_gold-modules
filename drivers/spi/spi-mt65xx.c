@@ -1786,6 +1786,9 @@ static int mtk_spi_probe(struct platform_device *pdev)
 				goto err_put_master;
 			}
 		}
+
+		/* gold's touch panels sit on pad-selected chip selects, without cs-gpios */
+		master->num_chipselect = mdata->pad_num;
 	}
 
 	platform_set_drvdata(pdev, master);
@@ -1885,13 +1888,6 @@ static int mtk_spi_probe(struct platform_device *pdev)
 			dev_err(&pdev->dev,
 				"pad_num does not match num_chipselect(%d != %d)\n",
 				mdata->pad_num, master->num_chipselect);
-			ret = -EINVAL;
-			goto err_put_master;
-		}
-
-		if (!master->cs_gpiods && master->num_chipselect > 1) {
-			dev_err(&pdev->dev,
-				"cs_gpiods not specified and num_chipselect > 1\n");
 			ret = -EINVAL;
 			goto err_put_master;
 		}
