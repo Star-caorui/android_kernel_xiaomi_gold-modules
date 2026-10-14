@@ -28,6 +28,7 @@
 #include <linux/bug.h>
 #include <linux/workqueue.h>
 #include <linux/slab.h>
+#include <linux/power_supply.h>
 //#include <mt-plat/mtk_thermal_monitor.h>
 //#include <mt-plat/mtk_thermal_platform.h>
 #include "mtk_thermal_monitor.h"
@@ -35,6 +36,7 @@
 #include <linux/uidgid.h>
 #include <gpu_misc.h>
 #include "mtk_thermal_platform_init.h"
+#include <tmp_bts.h>
 /* ************************************ */
 /* Definition */
 /* ************************************ */
@@ -196,6 +198,22 @@ static long _get_current_time_us(void)
 	return (t.tv_sec & 0xFFF) * 1000000 + t.tv_usec;
 }
 #endif
+
+/* gold: boards with the LN8000 charge pump use the secondary supply's NTCs */
+int get_supply_rank(void)
+{
+	int supply = MAIN_SUPPLY;
+	struct power_supply *psy;
+
+	psy = power_supply_get_by_name("ln8000-charger");
+	if (psy != NULL) {
+		supply = SECONDARY_SUPPLY;
+		power_supply_put(psy);
+	}
+
+	THRML_LOG("%s: supply is %d\n", __func__, supply);
+	return supply;
+}
 
 static int mtk_thermal_get_tz_idx(char *type)
 {
@@ -2057,7 +2075,7 @@ static int __init thermal_monitor_init(void)
 		mt6359vgpu_init();
 		mt6359tsx_init();
 		mt6359dcxo_init();
-		mtkts_btsnrpa_init();
+		mtkcs_cpu_init();
 		mtktsbattery_init();
 		mtkts_bts_init();
 		mtkts_btsmdpa_init();
@@ -2098,7 +2116,7 @@ static void __exit thermal_monitor_exit(void)
 	mt6359vgpu_exit();
 	mt6359tsx_exit();
 	mt6359dcxo_exit();
-	mtkts_btsnrpa_exit();
+	mtkcs_cpu_exit();
 	mtktsbattery_exit();
 	mtkts_bts_exit();
 	mtkts_btsmdpa_exit();

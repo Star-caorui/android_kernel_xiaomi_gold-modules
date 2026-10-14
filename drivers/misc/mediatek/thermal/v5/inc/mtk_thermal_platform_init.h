@@ -52,6 +52,8 @@ extern int mt6359vgpu_init(void);
 extern int mt6359tsx_init(void);
 extern int mt6359dcxo_init(void);
 extern int mtkts_btsnrpa_init(void);
+extern int mtkcs_cpu_init(void);
+extern void mtkcs_cpu_exit(void);
 extern void mt6359vcore_exit(void);
 extern void mt6359vproc_exit(void);
 extern void mt6359vgpu_exit(void);

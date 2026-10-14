@@ -67,7 +67,7 @@ endif
 
 thermal_monitor-y += common/thermal_zones/mtk_ts_pa.o
 thermal_monitor-y += common/thermal_zones/mtk_ts_pa_thput.o
-thermal_monitor-y += common/thermal_zones/mtk_ts_charger.o
+thermal_monitor-y += common/thermal_zones/mtk_ts_btscharger.o
 
 
 ifeq ($(strip $(CONFIG_MTK_PLAT_POWER_6853)),)
@@ -206,7 +206,7 @@ thermal_monitor-y += v5/src/mtk_ts_6359vgpu.o
 thermal_monitor-y += v5/src/mtk_ts_6359tsx.o
 thermal_monitor-y += v5/src/mtk_ts_6359dcxo.o
 thermal_monitor-y += common/thermal_zones/mtk_ts_imgsensor.o
-thermal_monitor-y += common/thermal_zones/mtk_ts_btsnrpa.o
+thermal_monitor-y += common/thermal_zones/mtk_cs_cpu.o
 thermal_monitor-y += common/thermal_zones/mtk_ts_dctm.o
 thermal_monitor-y += common/coolers/mtk_cooler_bcct_v1.o
 ifeq ($(CONFIG_MTK_THERMAL_PA_VIA_ATCMD),y)
