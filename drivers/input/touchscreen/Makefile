@@ -8,7 +8,6 @@ obj-y += $(foreach TOUCH,$(TOUCH_LISTS),$(TOUCH)/)
 
 ifneq ($(wildcard $(srctree)/$(src)/k6985v1_64_alpha),)
 endif
-obj-m   +=  tpd_notify.o
 obj-$(CONFIG_XIAOMI_USB_TOUCH_NOTIFIER) += xiaomi_usb_touch_notifier/
 obj-$(CONFIG_TOUCHSCREEN_XIAOMI_TOUCHFEATURE)   += xiaomi/
 obj-$(CONFIG_TOUCHSCREEN_NT36523D_HOSTDL_SPI)   += NT36523D_SPI/
