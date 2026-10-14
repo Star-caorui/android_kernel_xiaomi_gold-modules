@@ -104,6 +104,10 @@ obj-y += drivers/misc/mediatek/
 
 obj-y += drivers/misc/xiaomi/
 
+obj-y += drivers/misc/hqsysfs/
+
+obj-y += drivers/switch/
+
 obj-y += drivers/misc/perf_helper/
 
 obj-y += sound/soc/codecs/

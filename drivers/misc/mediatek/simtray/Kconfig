@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: GPL-2.0
+
+config SIMTRAY_STATUS
+	tristate "Xiaomi SIM tray status"
+	help
+	  SIM tray GPIO detection.

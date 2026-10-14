@@ -158,3 +158,4 @@ obj-$(CONFIG_MTK_PKVM_SMMU) += pkvm_smmu/
 obj-$(CONFIG_HALL_STATE) += hall/
 obj-$(CONFIG_HARDWARE_INFO)    += hardware_info/
 obj-$(CONFIG_PERFHELPER) += kswapd_aff/
+obj-$(CONFIG_SIMTRAY_STATUS) += simtray/

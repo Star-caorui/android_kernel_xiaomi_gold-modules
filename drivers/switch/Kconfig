@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: GPL-2.0
+
+config SWITCH
+	tristate "Switch class support"
+	help
+	  Monitoring switches by userspace via sysfs and uevent.
