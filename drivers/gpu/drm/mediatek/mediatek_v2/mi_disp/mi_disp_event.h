@@ -28,6 +28,7 @@ enum disp_mievent_type {
 	MI_EVENT_RD_PTR_TIMEOUT = 911002007,
 	MI_EVENT_WR_PTR_TIMEOUT = 911002008,
 	MI_EVENT_DP_READ_EDID_FAIL = 911003001,
+	MI_EVENT_CMDQ_TIMEOUT = 911101001,
 	MI_EVENT_MAX_EVENT_TYPE,
 };
 
@@ -58,4 +59,3 @@ void mi_disp_mievent_int(int disp_id,struct mi_event_info *mievent);
 void mi_disp_mievent_recovery(unsigned int event_type);
 
 #endif /* _MI_DISP_EVENT_H_ */
-

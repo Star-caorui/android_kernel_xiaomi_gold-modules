@@ -3,13 +3,13 @@
  * Copyright (c) 2020, The Linux Foundation. All rights reserved.
  * Copyright (c) 2020 XiaoMi, Inc. All rights reserved.
  */
-#define pr_fmt(fmt) "mi_disp_event:[%s:%d] " fmt, __func__, __LINE__
+#define pr_fmt(fmt) "mi_disp_event: " fmt
 
-//#include "mi_disp_print.h"
+#include "mi_disp_print.h"
 #include "mi_disp_event.h"
-#include <linux/string.h>
 #include <uapi/drm/mi_disp.h>
 
+#if IS_ENABLED(CONFIG_MIEV)
 #include <miev/mievent.h>
 
 const char *get_mievent_type_name(int event_type)
@@ -51,6 +51,8 @@ const char *get_mievent_type_name(int event_type)
 		return "backlight_zero";
 	case MI_EVENT_PINGPONG_TIMEOUT:
 		return "dsi_pingpong_timeout";
+	case MI_EVENT_CMDQ_TIMEOUT:
+		return "cmdq_timeout";
 	case MI_EVENT_DMA_CMD_TIMEOUT:
 		return "dsi_dma_cmd_timeout";
 	case MI_EVENT_RD_PTR_TIMEOUT:
@@ -109,6 +111,7 @@ unsigned int get_mievent_recovery_type(int event_type)
 		return 0;
 	}
 }
+#endif
 
 unsigned int ESD_TYPE = 0;
 
@@ -119,7 +122,7 @@ void mi_disp_mievent_str(unsigned int event_type){
 	struct misight_mievent *event  = cdev_tevent_alloc(event_type);
 
 	event_name = get_mievent_type_name(event_type);
-	//DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s]\n",event_type,event_name);
+	DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s]\n",event_type,event_name);
 
 	switch(event_type){
 	case MI_EVENT_DSI_ERROR:
@@ -138,7 +141,7 @@ void mi_disp_mievent_str(unsigned int event_type){
 		event_describe = "panel Hardware Err";
 	break;
 	default:
-		//DISP_ERROR("It's a invalid event_type");
+		DISP_ERROR("It's a invalid event_type");
 		cdev_tevent_destroy(event);
 		return;
 	}
@@ -160,7 +163,7 @@ void mi_disp_mievent_str(unsigned int event_type){
 void mi_disp_mievent_int(int disp_id,struct mi_event_info *mievent){
 #if IS_ENABLED(CONFIG_MIEV)
 	static int esd_count[2][3] = {0};
-	static int err_count[14] = {0};
+	static int err_count[15] = {0};
 	const char *event_name = NULL;
 	int esd_index = 0;
 	const bool smmu_fault = true;
@@ -176,7 +179,7 @@ void mi_disp_mievent_int(int disp_id,struct mi_event_info *mievent){
 
 	event_name = get_mievent_type_name(mievent->event_type);
 	if (!strcmp(event_name, "unknown")) {
-		//DISP_ERROR("Invalid event_type[%d]",mievent->event_type);
+		DISP_ERROR("Invalid event_type[%d]",mievent->event_type);
 		return;
 	}
 	event  = cdev_tevent_alloc(mievent->event_type);
@@ -184,20 +187,20 @@ void mi_disp_mievent_int(int disp_id,struct mi_event_info *mievent){
 	switch (mievent->event_type) {
 	case MI_EVENT_PANEL_UNDERRUN:
 		err_count[0]++;
-		//DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
-			//mievent->event_type,event_name,err_count[0]);
+		DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
+			mievent->event_type,event_name,err_count[0]);
 		cdev_tevent_add_int(event, event_name, err_count[0]);
 	break;
 	case MI_EVENT_ALL_ZERO_PCC:
 		err_count[1]++;
-		//DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
-			//mievent->event_type,event_name,err_count[1]);
+		DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
+			mievent->event_type,event_name,err_count[1]);
 		cdev_tevent_add_int(event, event_name, err_count[1]);
 	break;
 	case MI_EVENT_INVALID_FRAME_PENDING:
 		err_count[2]++;
-		//DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
-			//mievent->event_type,event_name,err_count[2]);
+		DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
+			mievent->event_type,event_name,err_count[2]);
 		cdev_tevent_add_int(event, event_name, err_count[2]);
 		cdev_tevent_add_int(event, "frame_pending_value", mievent->event_type_param1);
 	break;
@@ -206,8 +209,8 @@ void mi_disp_mievent_int(int disp_id,struct mi_event_info *mievent){
 			time_start_cmdr = ktime_get_boottime();
 
 		err_count[3]++;
-		//DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
-			//mievent->event_type,event_name,err_count[3]);
+		DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
+			mievent->event_type,event_name,err_count[3]);
 
 		if(time_after(jiffies , last_time_cmdr + wait_timeout)) {
 			last_time_cmdr = jiffies;
@@ -231,8 +234,8 @@ void mi_disp_mievent_int(int disp_id,struct mi_event_info *mievent){
 			time_start_cmds = ktime_get_boottime();
 
 		err_count[4]++;
-		//DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
-			//mievent->event_type,event_name,err_count[4]);
+		DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
+			mievent->event_type,event_name,err_count[4]);
 
 		if(time_after(jiffies , last_time_cmds + wait_timeout)) {
 			last_time_cmds = jiffies;
@@ -252,79 +255,85 @@ void mi_disp_mievent_int(int disp_id,struct mi_event_info *mievent){
 		}
 	break;
 	case MI_EVENT_SMMU_FAULT:
-		//DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s]\n",
-			//mievent->event_type,event_name);
+		DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s]\n",
+			mievent->event_type,event_name);
 		cdev_tevent_add_int(event, event_name, smmu_fault);
 	break;
 	case MI_EVENT_FENCE_SIGNAL_ERR:
 		err_count[5]++;
-		//DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
-			//mievent->event_type,event_name,err_count[5]);
+		DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
+			mievent->event_type,event_name,err_count[5]);
 		cdev_tevent_add_int(event, event_name, err_count[5]);
 		cdev_tevent_add_int(event, "done_count", mievent->event_type_param1);
 		cdev_tevent_add_int(event, "commit_count", mievent->event_type_param2);
 	break;
 	case MI_EVENT_CLOCK_ERR:
 		err_count[6]++;
-		//DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
-			//mievent->event_type,event_name,err_count[6]);
+		DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
+			mievent->event_type,event_name,err_count[6]);
 		cdev_tevent_add_int(event, event_name, err_count[6]);
 		cdev_tevent_add_int(event, "err_type", mievent->event_type_param1);
 	break;
 	case MI_EVENT_DMA_BUF_ALLOCATE_FAILED:
 		err_count[7]++;
-		//DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
-			//mievent->event_type,event_name,err_count[7]);
+		DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
+			mievent->event_type,event_name,err_count[7]);
 		cdev_tevent_add_int(event, event_name, err_count[7]);
 		cdev_tevent_add_int(event, "err_type", mievent->event_type_param1);
 	break;
 	case MI_EVENT_BACKLIGHT_ZERO:
 		err_count[8]++;
-		//DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s], %s panel err_count = %d\n",
-			//mievent->event_type,event_name, get_disp_id_name(disp_id), err_count[8]);
+		DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s], %s panel err_count = %d\n",
+			mievent->event_type,event_name, get_disp_id_name(disp_id), err_count[8]);
 		cdev_tevent_add_int(event, event_name, err_count[8]);
 	break;
 	case MI_EVENT_PINGPONG_TIMEOUT:
 		err_count[9]++;
-		//DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
-			//mievent->event_type,event_name,err_count[9]);
+		DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
+			mievent->event_type,event_name,err_count[9]);
 		cdev_tevent_add_int(event, event_name, err_count[9]);
 	break;
 	case MI_EVENT_DMA_CMD_TIMEOUT:
 		err_count[10]++;
-		//DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
-			//mievent->event_type,event_name,err_count[10]);
+		DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
+			mievent->event_type,event_name,err_count[10]);
 		cdev_tevent_add_int(event, event_name, err_count[10]);
 	break;
 	case MI_EVENT_RD_PTR_TIMEOUT:
 		err_count[11]++;
-		//DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s], %s panel err_count = %d\n",
-			//mievent->event_type,event_name, get_disp_id_name(disp_id), err_count[11]);
+		DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s], %s panel err_count = %d\n",
+			mievent->event_type,event_name, get_disp_id_name(disp_id), err_count[11]);
 		cdev_tevent_add_int(event, event_name, err_count[11]);
 	break;
 	case MI_EVENT_WR_PTR_TIMEOUT:
 		err_count[12]++;
-		//DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s], %s panel err_count = %d\n",
-			//mievent->event_type,event_name, get_disp_id_name(disp_id), err_count[12]);
+		DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s], %s panel err_count = %d\n",
+			mievent->event_type,event_name, get_disp_id_name(disp_id), err_count[12]);
 		cdev_tevent_add_int(event, event_name, err_count[12]);
 	break;
 	case MI_EVENT_DP_READ_EDID_FAIL:
 		err_count[13]++;
-		//DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
-			//mievent->event_type,event_name,err_count[13]);
+		DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
+			mievent->event_type,event_name,err_count[13]);
 		cdev_tevent_add_int(event, event_name, err_count[13]);
+	break;
+	case MI_EVENT_CMDQ_TIMEOUT:
+		err_count[14]++;
+		DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
+			mievent->event_type,event_name,err_count[14]);
+		cdev_tevent_add_int(event, event_name, err_count[14]);
 	break;
 	default:
 		ESD_TYPE = mievent->event_type;
 		esd_index = (mievent->event_type % 10) -1;
 		if(esd_index < 0 || esd_index >2 || !is_support_disp_id(disp_id)){
-			//DISP_ERROR("esd_index[%d]/disp_id[%d] is invalid",esd_index,disp_id);
-			//cdev_tevent_destroy(event);
+			DISP_ERROR("esd_index[%d]/disp_id[%d] is invalid",esd_index,disp_id);
+			cdev_tevent_destroy(event);
 			return;
 		}
 		esd_count[disp_id][esd_index]++;
-		//DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],esd_count[%d][%d] = %d\n",
-			//mievent->event_type,event_name,disp_id,esd_index,esd_count[disp_id][esd_index]);
+		DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],esd_count[%d][%d] = %d\n",
+			mievent->event_type,event_name,disp_id,esd_index,esd_count[disp_id][esd_index]);
 		cdev_tevent_add_int(event, event_name, esd_count[disp_id][esd_index]);
 
 		if(esd_num == 0)
@@ -379,15 +388,15 @@ void mi_disp_mievent_recovery(unsigned int event_type) {
 		Esd_Done_index = 2;
 	break;
 	default:
-		//DISP_ERROR("It is an invalid event_type[%d],recover_event_type[%d]",event_type,recover_event_type);
+		DISP_ERROR("It is an invalid event_type[%d],recover_event_type[%d]",event_type,recover_event_type);
 		return;
 	}
 
 	event  = cdev_tevent_alloc(recover_event_type);
 
 	Esd_Done_Count[disp_id][Esd_Done_index]++;
-	//DISP_INFO("recover_event_type[%d],event_name[%s],Esd_Done_Count[%d][%d] = %d\n",
-		//recover_event_type,event_name,disp_id,Esd_Done_index,Esd_Done_Count[disp_id][Esd_Done_index]);
+	DISP_INFO("recover_event_type[%d],event_name[%s],Esd_Done_Count[%d][%d] = %d\n",
+		recover_event_type,event_name,disp_id,Esd_Done_index,Esd_Done_Count[disp_id][Esd_Done_index]);
 	cdev_tevent_add_int(event, event_name, Esd_Done_Count[disp_id][Esd_Done_index]);
 	cdev_tevent_add_int(event, esd_event_type_name, event_type);
 	cdev_tevent_write(event);

@@ -108,7 +108,6 @@
 
 #include "mtk-mminfra-debug.h"
 #include "mtk_disp_bdg.h"
-#include "linux/hardware_info.h"
 #include "mtk_debug.h"
 
 #include "mtk_disp_vdisp_ao.h"
@@ -124,6 +123,14 @@
 #define DRIVER_DATE "20150513"
 #define DRIVER_MAJOR 1
 #define DRIVER_MINOR 0
+
+#ifdef CONFIG_MI_DISP
+#include "mi_disp/mi_disp_feature.h"
+#endif
+
+/* raised from system suspend until resume completes, see mtk_drm_early_resume() */
+atomic_t resume_pending;
+wait_queue_head_t resume_wait_q;
 #define IDLE_FPS 10 /*when fps is less than or euqal to 10, hwc not sending hw vsync*/
 
 #define PANEL_LCM_NAME_LEN_MAX 65
@@ -184,7 +191,6 @@ dma_addr_t test_pa;
 
 struct mtk_aod_scp_cb aod_scp_ipi;
 static char Lcm_name[PANEL_LCM_NAME_LEN_MAX] = {0};
-extern int hardwareinfo_set_prop(int cmd, const char *name);
 
 struct mtk_drm_disp_sec_cb disp_sec_cb;
 EXPORT_SYMBOL(disp_sec_cb);
@@ -8201,7 +8207,6 @@ int _parse_tag_videolfb(unsigned int *vramsize, phys_addr_t *fb_base,
 			*fps = videolfb_tag->fps;
 			snprintf(Lcm_name, sizeof(Lcm_name), "%s\n", videolfb_tag->lcmname);
 			DDPINFO("[DT][videolfb] Lcm_name = %s.\n", Lcm_name);
-			hardwareinfo_set_prop(HARDWARE_LCD, Lcm_name);
 			if (*fps == 0)
 				*fps = 6000;
 			goto found;
@@ -12219,8 +12224,27 @@ static int mtk_drm_sys_resume(struct device *dev)
 }
 #endif
 
-static SIMPLE_DEV_PM_OPS(mtk_drm_pm_ops, mtk_drm_sys_suspend,
-			 mtk_drm_sys_resume);
+#ifdef CONFIG_PM_SLEEP
+static int mtk_drm_sys_prepare(struct device *dev)
+{
+	atomic_inc(&resume_pending);
+	return 0;
+}
+
+static void mtk_drm_sys_complete(struct device *dev)
+{
+	atomic_set(&resume_pending, 0);
+	wake_up_all(&resume_wait_q);
+}
+#endif
+
+static const struct dev_pm_ops mtk_drm_pm_ops = {
+#ifdef CONFIG_PM_SLEEP
+	.prepare = mtk_drm_sys_prepare,
+	.complete = mtk_drm_sys_complete,
+#endif
+	SET_SYSTEM_SLEEP_PM_OPS(mtk_drm_sys_suspend, mtk_drm_sys_resume)
+};
 
 static const struct of_device_id mtk_drm_of_ids[] = {
 	{.compatible = "mediatek,mt2701-mmsys",
@@ -12348,6 +12372,9 @@ static int __init mtk_drm_init(void)
 	int i;
 
 	DDPINFO("%s+\n", __func__);
+#ifdef CONFIG_MI_DISP
+	mi_disp_feature_init();
+#endif
 	for (i = 0; i < ARRAY_SIZE(mtk_drm_drivers); i++) {
 		DDPINFO("%s register %s driver\n",
 			__func__, mtk_drm_drivers[i]->driver.name);

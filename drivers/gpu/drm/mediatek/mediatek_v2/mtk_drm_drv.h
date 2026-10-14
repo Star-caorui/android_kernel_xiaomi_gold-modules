@@ -518,6 +518,8 @@ extern struct mtk_drm_disp_sec_cb disp_sec_cb;
 extern struct mtk_aod_scp_cb aod_scp_ipi;
 extern struct mtk_vdisp_funcs vdisp_func;
 extern struct mtk_drm_disp_mtee_cb disp_mtee_cb;
+extern atomic_t resume_pending;
+extern wait_queue_head_t resume_wait_q;
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK_EDPTX_AUTO_SUPPORT)
 extern struct platform_driver mtk_dvo_driver;
 #endif

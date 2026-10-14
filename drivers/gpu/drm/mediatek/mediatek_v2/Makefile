@@ -3,6 +3,7 @@ subdir-ccflags-y += -Wno-error
 CFLAGS_mtk_layering_rule_base.o := -I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2
 
 mediatek-drm-y := mtk_drm_drv.o \
+		  mtk_notifier_odm.o \
 		  mtk_disp_tdshp.o \
 		  mtk_disp_color.o \
 		  mtk_disp_ccorr.o \

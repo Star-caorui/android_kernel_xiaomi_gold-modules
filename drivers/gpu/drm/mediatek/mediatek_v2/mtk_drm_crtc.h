@@ -32,6 +32,9 @@
 #include "mtk_disp_pmqos.h"
 #include "slbc_ops.h"
 #include "mtk_disp_pq_helper.h"
+#ifdef CONFIG_MI_DISP
+#include "mi_disp/mi_disp_esd_check.h"
+#endif
 
 #if IS_ENABLED(CONFIG_ARM64)
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK_AUTO_YCT)
@@ -1217,6 +1220,10 @@ struct mtk_drm_crtc {
 
 	bool capturing;
 
+#ifdef CONFIG_MI_DISP_ESD_CHECK
+	struct mi_esd_ctx *mi_esd_ctx;
+#endif
+
 	int dli_relay_1tnp;
 
 	unsigned int total_srt;
@@ -1262,6 +1269,10 @@ struct mtk_drm_crtc {
 	bool is_plane0_updated;
 
 	struct mutex sol_lock;
+#ifdef CONFIG_MI_DISP
+	int has_aod;
+	int aod_change;
+#endif
 };
 
 enum BL_GAMMA_GAIN {

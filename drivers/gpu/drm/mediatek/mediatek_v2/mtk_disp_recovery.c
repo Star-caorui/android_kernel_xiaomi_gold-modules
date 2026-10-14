@@ -478,6 +478,19 @@ done:
 	return ret;
 }
 
+#ifdef CONFIG_MI_DISP_ESD_CHECK
+static atomic_t panel_dead;
+int get_panel_dead_flag(void) {
+	return atomic_read(&panel_dead);
+}
+EXPORT_SYMBOL(get_panel_dead_flag);
+
+void set_panel_dead_flag(int value) {
+	atomic_set(&panel_dead, value);
+}
+EXPORT_SYMBOL(set_panel_dead_flag);
+#endif
+
 static int mtk_drm_esd_recover(struct drm_crtc *crtc)
 {
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
@@ -493,6 +506,9 @@ static int mtk_drm_esd_recover(struct drm_crtc *crtc)
 		DDPMSG("%s: crtc is inactive\n", __func__);
 		return 0;
 	}
+#ifdef CONFIG_MI_DISP_ESD_CHECK
+	atomic_set(&panel_dead, 1);
+#endif
 	CRTC_MMP_MARK(index, esd_recovery, 0, 1);
 	output_comp = mtk_ddp_comp_request_output(mtk_crtc);
 
@@ -567,6 +583,10 @@ static int mtk_drm_esd_recover(struct drm_crtc *crtc)
 
 	CRTC_MMP_MARK(index, esd_recovery, 0, 4);
 
+#ifdef CONFIG_MI_DISP_ESD_CHECK
+	mtk_ddp_comp_io_cmd(output_comp, NULL, ESD_RESTORE_BACKLIGHT, NULL);
+#endif
+
 	mtk_crtc_hw_block_ready(crtc);
 	if (mtk_crtc_is_frame_trigger_mode(crtc)) {
 		struct cmdq_pkt *cmdq_handle;
@@ -589,6 +609,9 @@ static int mtk_drm_esd_recover(struct drm_crtc *crtc)
 	CRTC_MMP_MARK(index, esd_recovery, 0, 5);
 
 done:
+#ifdef CONFIG_MI_DISP_ESD_CHECK
+	atomic_set(&panel_dead, 0);
+#endif
 	CRTC_MMP_EVENT_END(index, esd_recovery, 0, ret);
 	mtk_drm_trace_end();
 
@@ -785,6 +808,11 @@ void mtk_disp_esd_check_switch(struct drm_crtc *crtc, bool enable)
 	if (!mtk_drm_helper_get_opt(priv->helper_opt,
 					   MTK_DRM_OPT_ESD_CHECK_RECOVERY))
 		return;
+
+#ifdef CONFIG_MI_DISP_ESD_CHECK
+	if (mtk_crtc && mtk_crtc->mi_esd_ctx != NULL)
+		return;
+#endif
 
 	DDPINFO("%s %u, esd chk active: %d\n", __func__, index, enable);
 
