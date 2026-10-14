@@ -324,6 +324,7 @@ static int emi_icc_probe(struct platform_device *pdev)
 			GFP_KERNEL);
 	if (!data)
 		return -ENOMEM;
+	data->num_nodes = num_nodes;
 
 	provider = &mtk_icc->provider;
 	provider->dev = pdev->dev.parent;
@@ -353,7 +354,6 @@ static int emi_icc_probe(struct platform_device *pdev)
 
 		data->nodes[i] = node;
 	}
-	data->num_nodes = num_nodes;
 
 	ret = icc_provider_register(provider);
 	if (ret)
