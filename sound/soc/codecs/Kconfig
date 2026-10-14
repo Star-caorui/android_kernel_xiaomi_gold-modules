@@ -215,4 +215,5 @@ config SND_SOC_SIA8152X
         default m
 	help
 	  This option enables support for SIA8152S Smart K PA.
+source "$(KCONFIG_EXT_PREFIX)sound/soc/codecs/aw87559/Kconfig"
 endmenu
