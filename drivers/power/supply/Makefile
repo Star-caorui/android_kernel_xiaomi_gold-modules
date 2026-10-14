@@ -69,6 +69,5 @@ obj-$(CONFIG_CHARGER_RT9758)	+= rt9758-charger.o
 obj-$(CONFIG_UFCS_CLASS)	+= ufcs/
 
 # obj-$(CONFIG_CHARGER_BQ2589X)	+= bq2589x_charger.o
-obj-m     += wt_chg/
 obj-$(CONFIG_CHARGER_BQ25605) += bq25601.o
 obj-$(CONFIG_XM_CHG_DFS)    += xm_chg_dfs.o
