@@ -218,6 +218,8 @@ thermal_monitor-y += common/thermal_zones/mtk_ts_cpu_noBankv2.o
 thermal_monitor-y += v5/src/mtk_lvts_tc.o
 thermal_monitor-y += v5/src/mtk_tc_wrapper.o
 thermal_monitor-y += v5/src/mtk_pmic_efuse.o
+thermal_monitor-y += common/mi_thermal_message.o
+CFLAGS_common/mi_thermal_message.o += -I$(srctree)
 endif
 
 ifneq ($(strip $(CONFIG_MTK_PLAT_POWER_6893)),)

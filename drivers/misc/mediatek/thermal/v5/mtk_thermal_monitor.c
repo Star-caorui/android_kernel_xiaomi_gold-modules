@@ -2086,11 +2086,13 @@ static int __init thermal_monitor_init(void)
 		mtkts_dctm_init();
 		//wmt_tm_init();
 		tsallts_init();
+		thermal_message_init();
 		return 0;
 }
 
 static void __exit thermal_monitor_exit(void)
 {
+	thermal_message_exit();
 	mtkthermal_exit();
 	mtk_thermal_platform_exit();
 	mtk_cooler_shutdown_exit();
