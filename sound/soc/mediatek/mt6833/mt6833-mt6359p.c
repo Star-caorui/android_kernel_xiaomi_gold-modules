@@ -24,6 +24,9 @@
 #include "../../codecs/mt6359p-accdet.h"
 #endif
 #include "../common/mtk-sp-spk-amp.h"
+#if IS_ENABLED(CONFIG_SND_SOC_SIA8152X)
+#include "../../codecs/sipa/sipa_aux_dev_if.h"
+#endif
 
 /*
  * if need additional control for the ext spk amp that is connected
@@ -1192,6 +1195,14 @@ static int mt6833_mt6359_dev_probe(struct platform_device *pdev)
 	}
 
 	card->dev = &pdev->dev;
+
+#if IS_ENABLED(CONFIG_SND_SOC_SIA8152X)
+	/* gold's SIA81xx speaker amplifier joins the card as an auxiliary device */
+	ret = soc_aux_init_only_sia81xx(pdev, card);
+	if (ret)
+		dev_info(&pdev->dev, "%s no SIA81xx amplifier: %d\n",
+			 __func__, ret);
+#endif
 
 	ret = devm_snd_soc_register_card(&pdev->dev, card);
 	if (ret)

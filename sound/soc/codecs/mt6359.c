@@ -27,6 +27,10 @@
 #if IS_ENABLED(CONFIG_SND_SOC_MT6359P_ACCDET)
 #include "mt6359p-accdet.h"
 #endif
+#if IS_ENABLED(CONFIG_SND_SOC_AW87XXX)
+/* from gold's AW87xxx speaker amplifier driver */
+extern int aw87xxx_add_codec_controls(void *codec);
+#endif
 
 #define MAX_DEBUG_WRITE_INPUT 256
 #define CODEC_SYS_DEBUG_SIZE (1024 * 32) // 32K
@@ -5542,6 +5546,12 @@ static int mt6359_codec_probe(struct snd_soc_component *cmpnt)
 				       ARRAY_SIZE(mt6359_snd_vow_controls));
 
 	priv->hp_current_calibrate_val = get_hp_current_calibrate_val(priv);
+
+#if IS_ENABLED(CONFIG_SND_SOC_AW87XXX)
+	/* the AW87xxx amplifier's controls are on the codec */
+	if (aw87xxx_add_codec_controls(cmpnt) < 0)
+		dev_info(priv->dev, "%s: no AW87xxx controls\n", __func__);
+#endif
 
 	return mt6359_codec_init_reg(cmpnt);
 }
