@@ -733,4 +733,21 @@ void KD_IMGSENSOR_PROFILE_I2C(char *tag, int trans_num);
 
 #define mDELAY(ms)     mdelay(ms)
 #define uDELAY(us)       udelay(us)
+/* gold's sensors */
+#define OV64B40_OFILM_MAIN_SENSOR_ID            0x6442
+#define S5KHM6_SEMCO_MAIN_SENSOR_ID             0x1AD6
+#define S5KHM6_AAC_MAIN_SENSOR_ID               0x1AD7
+#define OV50D40_SUNNY_MAIN_SENSOR_ID            0x565044
+#define OV16A1Q_AAC_FRONT_SENSOR_ID             0x1641
+#define OV16A1Q_SUNNY_FRONT_SENSOR_ID           0x1642
+#define GC16B3_AAC_FRONT_SENSOR_ID              0x16B3
+#define GC16B3_SUNNY_FRONT_SENSOR_ID            0x16B4
+#define OV08D10_AAC_ULTRA_SENSOR_ID             0x56084700
+#define OV08D10_SUNNY_ULTRA_SENSOR_ID           0x56084701
+#define SC202CS_AAC_DEPTH_SENSOR_ID             0xEB52
+#define SC202CS_SUNNY_DEPTH_SENSOR_ID           0xEB53
+#define SC202CS_SUNNY2_DEPTH_SENSOR_ID          0xEB56
+#define SC202PCS_AAC_MACRO_SENSOR_ID            0xEB54
+#define SC202PCS_SUNNY_MACRO_SENSOR_ID          0xEB55
+
 #endif              /* _KD_IMGSENSOR_H */
