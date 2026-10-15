@@ -59,5 +59,11 @@ struct scp_feature_tb feature_table[NUM_FEATURE_ID] = {
 	{
 		.feature        = RVVOICE_CALL_FEATURE_ID,
 	},
+	/* gold: the sensor hub runs fusion faster while a fusion sensor is on */
+	{
+		.feature        = FUSION_FEATURE_ID,
+		.freq           = 450,
+		.enable         = 0,
+	},
 };
 

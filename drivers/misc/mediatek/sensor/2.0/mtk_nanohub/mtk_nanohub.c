@@ -86,9 +86,10 @@ struct mtk_nanohub_device {
 
 	int32_t acc_config_data[6];
 	int32_t gyro_config_data[12];
-	int32_t mag_config_data[9];
-	int32_t light_config_data[1];
-	int32_t proximity_config_data[2];
+	int32_t mag_config_data[10];
+	int32_t light_config_data[5];
+	int32_t light_config_data_cali[5];
+	int32_t proximity_config_data[6];
 	int32_t pressure_config_data[2];
 	int32_t sar_config_data[4];
 	int32_t ois_config_data[2];
@@ -111,6 +112,7 @@ static DEFINE_SPINLOCK(config_data_lock);
 static uint8_t scp_system_ready;
 static uint8_t scp_chre_ready;
 static struct mtk_nanohub_device *mtk_nanohub_dev;
+static bool fusion_any_on;
 
 static int mtk_nanohub_send_timestamp_to_hub(void);
 static int mtk_nanohub_server_dispatch_data(uint32_t *currWp);
@@ -454,6 +456,30 @@ static void mtk_nanohub_init_sensor_info(void)
 	strlcpy(p->name, "light", sizeof(p->name));
 	strlcpy(p->vendor, "mtk", sizeof(p->vendor));
 
+	p = &sensor_state[SENSOR_TYPE_PS_FACTORY_STRM];
+	p->sensorType = SENSOR_TYPE_PS_FACTORY_STRM;
+	p->gain = 1;
+	strlcpy(p->name, "prox_factory_strm", sizeof(p->name));
+	strlcpy(p->vendor, "xiaomi", sizeof(p->vendor));
+
+	p = &sensor_state[SENSOR_TYPE_ALS_FACTORY_STRM];
+	p->sensorType = SENSOR_TYPE_ALS_FACTORY_STRM;
+	p->gain = 1;
+	strlcpy(p->name, "als_factory_str", sizeof(p->name));
+	strlcpy(p->vendor, "xiaomi", sizeof(p->vendor));
+
+	p = &sensor_state[SENSOR_TYPE_FRONT_CCT_FACTORY_STRM];
+	p->sensorType = SENSOR_TYPE_FRONT_CCT_FACTORY_STRM;
+	p->gain = 1;
+	strlcpy(p->name, "cct_factory_str", sizeof(p->name));
+	strlcpy(p->vendor, "xiaomi", sizeof(p->vendor));
+
+	p = &sensor_state[SENSOR_TYPE_AOD];
+	p->sensorType = SENSOR_TYPE_AOD;
+	p->gain = 1;
+	strlcpy(p->name, "aod", sizeof(p->name));
+	strlcpy(p->vendor, "xiaomi", sizeof(p->vendor));
+
 	p = &sensor_state[SENSOR_TYPE_PROXIMITY];
 	p->sensorType = SENSOR_TYPE_PROXIMITY;
 	p->gain = 1;
@@ -585,6 +611,27 @@ static void mtk_nanohub_init_sensor_info(void)
 	p->gain = 1;
 	strlcpy(p->name, "sar", sizeof(p->name));
 	strlcpy(p->vendor, "mtk", sizeof(p->vendor));
+
+	p = &sensor_state[SENSOR_TYPE_SAR_ALGO];
+	p->sensorType = SENSOR_TYPE_SAR_ALGO;
+	p->rate = SENSOR_RATE_ONCHANGE;
+	p->gain = 1;
+	strlcpy(p->name, "sar_algo", sizeof(p->name));
+	strlcpy(p->vendor, "xiaomi", sizeof(p->vendor));
+
+	p = &sensor_state[SENSOR_TYPE_SAR_ALGO_1];
+	p->sensorType = SENSOR_TYPE_SAR_ALGO_1;
+	p->rate = SENSOR_RATE_ONCHANGE;
+	p->gain = 1;
+	strlcpy(p->name, "sar_algo_1", sizeof(p->name));
+	strlcpy(p->vendor, "xiaomi", sizeof(p->vendor));
+
+	p = &sensor_state[SENSOR_TYPE_SAR_ALGO_2];
+	p->sensorType = SENSOR_TYPE_SAR_ALGO_2;
+	p->rate = SENSOR_RATE_ONCHANGE;
+	p->gain = 1;
+	strlcpy(p->name, "sar_algo_2", sizeof(p->name));
+	strlcpy(p->vendor, "xiaomi", sizeof(p->vendor));
 
 	p = &sensor_state[SENSOR_TYPE_OIS];
 	p->sensorType = SENSOR_TYPE_OIS;
@@ -864,6 +911,43 @@ static void mtk_nanohub_disable_report_flush(uint8_t sensor_id)
 	mutex_unlock(&flush_mtx);
 }
 
+static bool mtk_nanohub_is_fusion_type(int sensor_type)
+{
+	switch (sensor_type) {
+	case SENSOR_TYPE_ORIENTATION:
+	case SENSOR_TYPE_GRAVITY:
+	case SENSOR_TYPE_LINEAR_ACCELERATION:
+	case SENSOR_TYPE_ROTATION_VECTOR:
+	case SENSOR_TYPE_GAME_ROTATION_VECTOR:
+	case SENSOR_TYPE_GEOMAGNETIC_ROTATION_VECTOR:
+		return true;
+	default:
+		return false;
+	}
+}
+
+/* gold: ask for the sensor hub's fusion clock while any fusion sensor is on */
+static void mtk_nanohub_check_fusion_state(int sensor_type)
+{
+	bool any_on;
+
+	if (!mtk_nanohub_is_fusion_type(sensor_type))
+		return;
+	any_on = sensor_state[SENSOR_TYPE_ORIENTATION].enable ||
+		sensor_state[SENSOR_TYPE_GRAVITY].enable ||
+		sensor_state[SENSOR_TYPE_LINEAR_ACCELERATION].enable ||
+		sensor_state[SENSOR_TYPE_ROTATION_VECTOR].enable ||
+		sensor_state[SENSOR_TYPE_GAME_ROTATION_VECTOR].enable ||
+		sensor_state[SENSOR_TYPE_GEOMAGNETIC_ROTATION_VECTOR].enable;
+	if (any_on == fusion_any_on)
+		return;
+	if (any_on)
+		scp_register_feature(FUSION_FEATURE_ID);
+	else
+		scp_deregister_feature(FUSION_FEATURE_ID);
+	fusion_any_on = any_on;
+}
+
 int mtk_nanohub_enable_to_hub(uint8_t sensor_id, int enabledisable)
 {
 	uint8_t sensor_type = id_to_type(sensor_id);
@@ -884,6 +968,7 @@ int mtk_nanohub_enable_to_hub(uint8_t sensor_id, int enabledisable)
 		return -1;
 	}
 	sensor_state[sensor_type].enable = enabledisable;
+	mtk_nanohub_check_fusion_state(sensor_type);
 	init_sensor_config_cmd(&cmd, sensor_type);
 	if (atomic_read(&power_status) == SENSOR_POWER_UP) {
 		ret = nanohub_external_write((const uint8_t *)&cmd,
@@ -1907,6 +1992,10 @@ static int mtk_nanohub_config(struct hf_device *hfdev,
 			length = sizeof(device->light_config_data);
 		spin_lock(&config_data_lock);
 		memcpy(device->light_config_data, data, length);
+		/* 103 marks the calibration result, kept to be read back */
+		if (device->light_config_data[0] == 103)
+			memcpy(device->light_config_data_cali,
+				device->light_config_data, length);
 		spin_unlock(&config_data_lock);
 		break;
 	case ID_PROXIMITY:
@@ -2010,12 +2099,15 @@ static int mtk_nanohub_custom_cmd(struct hf_device *hfdev,
 			break;
 		case SENSOR_TYPE_LIGHT:
 			if (sizeof(cust_cmd->data) <
-					sizeof(device->light_config_data))
+					sizeof(device->light_config_data_cali))
 				return -EINVAL;
-			cust_cmd->rx_len = sizeof(device->light_config_data);
+			cust_cmd->rx_len = sizeof(device->light_config_data_cali);
 			spin_lock(&config_data_lock);
-			memcpy(cust_cmd->data, device->light_config_data,
-					sizeof(device->light_config_data));
+			cust_cmd->data[0] = device->light_config_data_cali[1];
+			cust_cmd->data[1] = device->light_config_data_cali[2];
+			cust_cmd->data[2] = device->light_config_data_cali[3];
+			cust_cmd->data[3] = device->light_config_data_cali[4];
+			cust_cmd->data[4] = 1000;
 			spin_unlock(&config_data_lock);
 			break;
 		case SENSOR_TYPE_PROXIMITY:
@@ -2195,13 +2287,6 @@ static int mtk_nanohub_report_to_manager(struct data_unit_t *data)
 			event.word[0] = data->tilt_event.state;
 			break;
 		case ID_SAR:
-			event.timestamp = data->time_stamp;
-			event.sensor_type = id_to_type(data->sensor_type);
-			event.action = data->flush_action;
-			event.word[0] = data->sar_event.data[0];
-			event.word[1] = data->sar_event.data[1];
-			event.word[2] = data->sar_event.data[2];
-			break;
 		default:
 			event.timestamp = data->time_stamp;
 			event.sensor_type = id_to_type(data->sensor_type);
@@ -2212,6 +2297,8 @@ static int mtk_nanohub_report_to_manager(struct data_unit_t *data)
 			event.word[3] = data->data[3];
 			event.word[4] = data->data[4];
 			event.word[5] = data->data[5];
+			event.word[6] = data->data[6];
+			event.word[7] = data->data[7];
 			break;
 		}
 	} else if (data->flush_action == FLUSH_ACTION) {
@@ -2288,12 +2375,20 @@ static int mtk_nanohub_report_to_manager(struct data_unit_t *data)
 			event.action = data->flush_action;
 			event.word[0] = data->data[0];
 			event.word[1] = data->data[1];
+			event.word[2] = data->data[2];
+			event.word[3] = data->data[3];
+			event.word[4] = data->data[4];
+			event.word[5] = data->data[5];
 			break;
 		case ID_LIGHT:
 			event.timestamp = data->time_stamp;
 			event.sensor_type = id_to_type(data->sensor_type);
 			event.action = data->flush_action;
 			event.word[0] = data->data[0];
+			event.word[1] = data->data[1];
+			event.word[2] = data->data[2];
+			event.word[3] = data->data[3];
+			event.word[4] = data->data[4];
 			break;
 		case ID_PRESSURE:
 			event.timestamp = data->time_stamp;
@@ -2306,9 +2401,15 @@ static int mtk_nanohub_report_to_manager(struct data_unit_t *data)
 			event.timestamp = data->time_stamp;
 			event.sensor_type = id_to_type(data->sensor_type);
 			event.action = data->flush_action;
-			event.word[0] = data->sar_event.x_bias;
-			event.word[1] = data->sar_event.y_bias;
-			event.word[2] = data->sar_event.z_bias;
+			event.word[0] = data->data[0];
+			event.word[1] = data->data[1];
+			event.word[2] = data->data[2];
+			break;
+		case ID_SAR_ALGO:
+			event.timestamp = data->time_stamp;
+			event.sensor_type = id_to_type(data->sensor_type);
+			event.action = data->flush_action;
+			event.word[0] = data->data[0];
 			break;
 		case ID_OIS:
 			event.timestamp = data->time_stamp;
