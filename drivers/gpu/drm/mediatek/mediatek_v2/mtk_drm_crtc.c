@@ -63,6 +63,8 @@
 #include "mtk_disp_pq_helper.h"
 #include "mtk_debug.h"
 #include "mtk_disp_bdg.h"
+
+extern bool gold_doze_te;
 #include "mtk_disp_oddmr/mtk_disp_oddmr.h"
 #include "platform/mtk_drm_platform.h"
 #include "mtk_disp_vidle.h"
@@ -11124,7 +11126,7 @@ void mtk_crtc_start_trig_loop(struct drm_crtc *crtc)
 				    && params_lcm && params_lcm->msync2_enable)
 					cmdq_pkt_request_te(cmdq_handle, mtk_crtc);
 
-				if (panel_connected)
+				if (panel_connected && gold_doze_te)
 					GCE_DO(wfe, EVENT_TE);
 			}
 		}

@@ -979,6 +979,108 @@ int panel_get_doze_brightness(struct drm_panel *panel, u32 *brightness) {
 }
 
 /*N17 code for HQ-306105 by p-lizongrui at 2023/07/25 end*/
+
+/*
+ * AOD experiment: with aod_cmd the DSI switches to command mode in doze, so
+ * that the panel keeps the last frame in its RAM and the display path can be
+ * turned off (doze suspend); aod_idle also puts the panel in idle mode (0x39).
+ */
+static bool aod_cmd;
+module_param(aod_cmd, bool, 0644);
+static bool aod_idle;
+module_param(aod_idle, bool, 0644);
+static bool aod_idle_on;
+
+/*
+ * Register sequences to try, as hex bytes, commands separated by ';'
+ * (e.g. "9f01;b400000000"): aod_pre is sent before the DSI leaves video
+ * mode, aod_post after it entered command mode, aod_exit when doze ends.
+ */
+static char aod_pre[256];
+module_param_string(aod_pre, aod_pre, sizeof(aod_pre), 0644);
+static char aod_post[256];
+module_param_string(aod_post, aod_post, sizeof(aod_post), 0644);
+static char aod_exit[256];
+module_param_string(aod_exit, aod_exit, sizeof(aod_exit), 0644);
+
+static void aod_send_seq(const char *name, const char *seq, void *dsi, dcs_write_gce cb, void *handle)
+{
+	u8 buf[64];
+	int n = 0, hi = -1;
+	const char *c;
+
+	for (c = seq; ; c++) {
+		int v = -1;
+
+		if (*c >= '0' && *c <= '9')
+			v = *c - '0';
+		else if (*c >= 'a' && *c <= 'f')
+			v = *c - 'a' + 10;
+		else if (*c >= 'A' && *c <= 'F')
+			v = *c - 'A' + 10;
+		if (v >= 0) {
+			if (hi < 0) {
+				hi = v;
+			} else {
+				if (n < sizeof(buf))
+					buf[n++] = (hi << 4) | v;
+				hi = -1;
+			}
+			continue;
+		}
+		if (*c == ';' || *c == '\0' || *c == '\n') {
+			if (n) {
+				pr_info("%s: %s %*ph\n", __func__, name, n, buf);
+				cb(dsi, handle, buf, n);
+			}
+			n = 0;
+			hi = -1;
+			if (*c != ';')
+				break;
+		}
+	}
+}
+
+static int panel_doze_enable_start(struct drm_panel *panel, void *dsi, dcs_write_gce cb, void *handle)
+{
+	aod_send_seq("pre", aod_pre, dsi, cb, handle);
+	return 0;
+}
+
+static unsigned long panel_doze_get_mode_flags(struct drm_panel *panel, int doze_en)
+{
+	pr_info("%s: doze_en %d aod_cmd %d\n", __func__, doze_en, aod_cmd);
+	if (doze_en && aod_cmd)
+		return MIPI_DSI_MODE_LPM | MIPI_DSI_CLOCK_NON_CONTINUOUS;
+	return MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_SYNC_PULSE;
+}
+
+static int panel_doze_enable(struct drm_panel *panel, void *dsi, dcs_write_gce cb, void *handle)
+{
+	char idle_on = 0x39;
+
+	pr_info("%s: aod_idle %d\n", __func__, aod_idle);
+	aod_send_seq("post", aod_post, dsi, cb, handle);
+	if (aod_idle) {
+		cb(dsi, handle, &idle_on, 1);
+		aod_idle_on = true;
+	}
+	return 0;
+}
+
+static int panel_doze_disable(struct drm_panel *panel, void *dsi, dcs_write_gce cb, void *handle)
+{
+	char idle_off = 0x38;
+
+	pr_info("%s: aod_idle_on %d\n", __func__, aod_idle_on);
+	aod_send_seq("exit", aod_exit, dsi, cb, handle);
+	if (aod_idle_on) {
+		cb(dsi, handle, &idle_off, 1);
+		aod_idle_on = false;
+	}
+	return 0;
+}
+
 static struct mtk_panel_funcs ext_funcs = {
 	.set_backlight_cmdq = panel_setbacklight_cmdq,
 	.reset = panel_ext_reset,
@@ -998,6 +1100,10 @@ static struct mtk_panel_funcs ext_funcs = {
 	.get_wp_info = panel_get_wp_info,
 /*N17 code for HQ-299519 by p-lizongrui at 2023/07/10 end*/
 /*N17 code for HQ-306105 by p-lizongrui at 2023/07/25 start*/
+	.doze_get_mode_flags = panel_doze_get_mode_flags,
+	.doze_enable_start = panel_doze_enable_start,
+	.doze_enable = panel_doze_enable,
+	.doze_disable = panel_doze_disable,
 	.set_doze_brightness = panel_set_doze_brightness,
 	.get_doze_brightness = panel_get_doze_brightness,
 /*N17 code for HQ-306105 by p-lizongrui at 2023/07/25 end*/

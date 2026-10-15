@@ -711,6 +711,17 @@ struct mtk_panel_ext *mtk_dsi_get_panel_ext(struct mtk_ddp_comp *comp);
 /* gold's panels are powered up and down around the DSI by init_power/power_down */
 static bool lcm_power_inited;
 
+/*
+ * AOD experiment behind MT6382: doze_te=0 sends command mode frames without
+ * waiting for the panel's TE, in case TE does not come back through the bridge.
+ */
+bool gold_doze_te = true;
+module_param_named(doze_te, gold_doze_te, bool, 0644);
+/* doze_esd=0 ignores the panel's error flag while in a command mode doze */
+static bool gold_doze_esd = true;
+module_param_named(doze_esd, gold_doze_esd, bool, 0644);
+extern unsigned int bdg_tx_mode;
+
 #ifdef CONFIG_MI_DISP_NOTIFIER
 static int blank;
 #endif
@@ -5049,8 +5060,27 @@ static void mtk_output_en_doze_switch(struct mtk_dsi *dsi)
 				dsi->panel, doze_enabled);
 
 		if (is_bdg_supported()) {
-			if (mtk_dsi_is_cmd_mode(&dsi->ddp_comp))
-				mtk_dsi_mask(dsi, DSI_TXRX_CTRL(dsi->driver_data), EXT_TE_EN, EXT_TE_EN);
+			/* set the bridge over SPI as mtk_output_dsi_enable() does */
+			bdg_tx_stop(DISP_BDG_DSI0, NULL);
+			bdg_tx_set_mode(DISP_BDG_DSI0, NULL, dsi);
+			if (mtk_dsi_is_cmd_mode(&dsi->ddp_comp)) {
+				bdg_rx_reset(NULL);
+				bdg_tx_reset(DISP_BDG_DSI0, NULL);
+				if (gold_doze_te)
+					mtk_dsi_mask(dsi, DSI_TXRX_CTRL(dsi->driver_data), EXT_TE_EN, EXT_TE_EN);
+				else
+					mtk_dsi_mask(dsi, DSI_TXRX_CTRL(dsi->driver_data), EXT_TE_EN, 0);
+#ifdef CONFIG_MI_DISP_ESD_CHECK
+				if (!gold_doze_esd)
+					mi_disp_err_flag_esd_check_switch(&dsi->ddp_comp.mtk_crtc->base, false);
+#endif
+			} else {
+				mtk_dsi_mask(dsi, DSI_TXRX_CTRL(dsi->driver_data), EXT_TE_EN, 0);
+				bdg_tx_start(DISP_BDG_DSI0, NULL);
+			}
+			bdg_tx_mode = dsi->mode_flags & MIPI_DSI_MODE_VIDEO;
+			DDPMSG("%s bridge mode %s, te %d\n", __func__,
+				bdg_tx_mode ? "video" : "command", gold_doze_te);
 		} else {
 			if (mtk_dsi_is_cmd_mode(&dsi->ddp_comp) && dsi->driver_data)
 				mtk_dsi_mask(dsi, DSI_TXRX_CTRL(dsi->driver_data), (EXT_TE_EN | HSTX_CKLP_EN),
@@ -6566,6 +6596,10 @@ static void mtk_dsi_encoder_disable(struct drm_encoder *encoder)
 	CRTC_MMP_MARK(index, dsi_suspend, 2, 0);
 
 	mtk_output_dsi_disable(dsi, NULL, false);
+	/* in doze suspend the panel keeps showing its RAM: keep the bridge and the panel up */
+	if (mtk_dsi_doze_state(dsi)) {
+		DDPMSG("%s doze suspend: bridge and panel stay on\n", __func__);
+	} else {
 	if (is_bdg_supported())
 		bdg_common_deinit(DISP_BDG_DSI0, NULL, dsi);
 	if (dsi->panel && dsi->ext && dsi->ext->funcs &&
@@ -6573,6 +6607,7 @@ static void mtk_dsi_encoder_disable(struct drm_encoder *encoder)
 		dsi->ext->funcs->power_down(dsi->panel);
 		DDPINFO("lcm power down after dsi\n");
 		lcm_power_inited = false;
+	}
 	}
 
 	CRTC_MMP_MARK(index, dsi_suspend, 3, 0);
