@@ -79,8 +79,8 @@ static irqreturn_t sia91xx_irq(
 void sia91xx_register_interrupt(sipa_dev_t *si_pa)
 {
 	int irq_flags;
-	int ret = 0;
-        pr_debug("[debug][%s] %s: ret=%d !!! \r\n", LOG_FLAG, __func__, ret);
+	int ret;
+
 	if (gpio_is_valid(si_pa->irq_pin)) {
 		irq_flags = IRQF_TRIGGER_RISING;
 
@@ -91,6 +91,9 @@ void sia91xx_register_interrupt(sipa_dev_t *si_pa)
 			ret = request_irq(gpio_to_irq(si_pa->irq_pin), sia91xx_irq,
 				irq_flags, "sia91xx_R", si_pa);
 		}
+		if (ret)
+			pr_err("[  err][%s] %s: request_irq failed %d \r\n",
+				LOG_FLAG, __func__, ret);
 	} else {
 		pr_err("[  err][%s] %s: irq pin error !!! \r\n", LOG_FLAG, __func__);
 	}
@@ -99,10 +102,10 @@ void sia91xx_register_interrupt(sipa_dev_t *si_pa)
 #if 0
 void sia91xx_monitor(struct work_struct *work)
 {
-	uint32_t IntVal;
+	uint16_t IntVal;
 	sipa_dev_t *si_pa = container_of(work, sipa_dev_t, interrupt_work.work);
 
-	sipa_read_reg(si_pa->regmap, SIA91XX_REG_INT_STAT, &IntVal);
+	sia91xx_read_reg16(si_pa, SIA91XX_REG_INT_STAT, &IntVal);
 	if (IntVal & 0x3ff) {
 		pr_err("[  err]%s: interrupt event occurred !!! \r\n", __func__);
 	}
@@ -116,17 +119,17 @@ void sia91xx_monitor(struct work_struct *work)
 void sia91xx_interrupt(struct work_struct *work)
 {
 	sipa_dev_t *si_pa = container_of(work, sipa_dev_t, interrupt_work.work);
-	uint32_t IntReg, IntEn, IntVal, regVal;
+	uint16_t IntReg, IntEn, IntVal, regVal;
 	unsigned int i;
 
-	sipa_read_reg(si_pa->regmap, SIA91XX_REG_INT_REG, &IntReg);
-	sipa_read_reg(si_pa->regmap, SIA91XX_REG_INT_EN, &IntEn);
+	sia91xx_read_reg16(si_pa, SIA91XX_REG_INT_REG, &IntReg);
+	sia91xx_read_reg16(si_pa, SIA91XX_REG_INT_EN, &IntEn);
 
 	if (0 == (IntEn & IntReg)) {
 		pr_err("[  err][%s] %s: interrupt source error !!! \r\n",LOG_FLAG, __func__);
 		return;
 	}
-	IntVal = IntReg & 0xffff;
+	IntVal = IntReg & 0xff;
 
 	for (i = 0; i < ARRAY_SIZE(irq_range); i++) {
 		if (IntVal == irq_range[i].index)
@@ -155,23 +158,18 @@ void sia91xx_interrupt(struct work_struct *work)
 	}
 #endif
 
-	sipa_read_reg(si_pa->regmap, SIA91XX_REG_INT_STAT, &regVal);
-	usleep_range(1000, 2000);
-	sipa_write_reg(si_pa->regmap, SIA91XX_REG_INT_WC_REG, IntVal);
+	sia91xx_read_reg16(si_pa, SIA91XX_REG_INT_STAT, &regVal);
+	msleep(1);
+	sia91xx_write_reg16(si_pa, SIA91XX_REG_INT_WC_REG, IntVal);
 }
 
 int sia91xx_ext_reset(sipa_dev_t *si_pa)
 {
 	if (si_pa && gpio_is_valid(si_pa->rst_pin)) {
-
-		if (si_pa->chip_type == CHIP_TYPE_SIA5118) {
-			gpio_set_value_cansleep(si_pa->rst_pin, SIA91XX_HIGH_LEVEL);
-		} else {
-			gpio_set_value_cansleep(si_pa->rst_pin, SIA91XX_HIGH_LEVEL);
-			usleep_range(5000, 6000);
-			gpio_set_value_cansleep(si_pa->rst_pin, SIA91XX_LOW_LEVEL);
-			usleep_range(5000, 6000);
-		}
+		gpio_set_value_cansleep(si_pa->rst_pin, 1);
+		mdelay(5);
+		gpio_set_value_cansleep(si_pa->rst_pin, 0);
+		mdelay(5);
 	}
 
 	return 0;
@@ -250,10 +248,6 @@ int sia91xx_detect_chip(
 		return -EIO;
 	}
 
-	if (si_pa->chip_type == CHIP_TYPE_SIA5118) {
-		gpio_set_value(si_pa->rst_pin, SIA91XX_LOW_LEVEL);
-	}
-
 	return 0;
 }
 
@@ -315,14 +309,11 @@ int sia91xx_startup(
 	pr_debug("[debug][%s] %s: dai:%s, substream:%s, startup, stream = %d \r\n",
 			LOG_FLAG, __func__, dai->name, substream->name, substream->stream);
 
-	if (si_pa->chip_type == CHIP_TYPE_SIA5118) {
-		gpio_set_value(si_pa->rst_pin, SIA91XX_HIGH_LEVEL);
-	} else {
-		if (SIA91XX_HIGH_LEVEL == gpio_get_value(si_pa->rst_pin)) {
-			gpio_set_value(si_pa->rst_pin, SIA91XX_LOW_LEVEL);
-			usleep_range(5000, 6000);
-		}
+	if (SIA91XX_DISABLE_LEVEL == gpio_get_value(si_pa->rst_pin)) {
+		gpio_set_value(si_pa->rst_pin, 0);
+		mdelay(5);
 	}
+	sipa_reg_init(si_pa);
 
 	return 0;
 }
@@ -348,27 +339,30 @@ int sia91xx_set_fmt(struct snd_soc_dai *dai, unsigned int fmt)
 	return 0;
 }
 
-int sia91xx_smartpa_soft_mute(sipa_dev_t *si_pa)
+int sia91xx_soft_mute(sipa_dev_t *si_pa)
 {
+	pr_info("[ info][%s] %s: mute_mode: %d !!! \r\n", 
+		LOG_FLAG, __func__, si_pa->mute_mode);
+
 	if (sipa_regmap_set_chip_off(si_pa))
 		return 0;
 
 	return -1;
 }
 
-int sia91xx_smartpa_start(sipa_dev_t *si_pa, int stream)
+int sia91xx_dsp_start(sipa_dev_t *si_pa, int stream)
 {
-	uint8_t start_count = 0;
+	uint8_t dsp_count = 0;
 
-	while (start_count < SIA91XX_MAX_PA_START_TRY_COUNT) {
+	while (dsp_count < SIA91XX_MAX_DSP_START_TRY_COUNT) {
 		if (stream == SNDRV_PCM_STREAM_PLAYBACK 
 			&& sipa_regmap_set_chip_on(si_pa)) {
 			break;
 		}
-		start_count++;
+		dsp_count++;
 	}
 
-	if (start_count >= SIA91XX_MAX_PA_START_TRY_COUNT &&
+	if (dsp_count >= SIA91XX_MAX_DSP_START_TRY_COUNT &&
 		stream == SNDRV_PCM_STREAM_PLAYBACK) {
 			pr_err("[  err][%s] %s: Failed starting device \n",LOG_FLAG, __func__);
 			return -SIPA_ERROR_DEV_START;
@@ -399,35 +393,21 @@ int sia91xx_mute(
 
 	pr_debug("[debug][%s] %s: dai:%s,%s mute = %d stream = %d\n", 
 		LOG_FLAG, __func__, dai->name, dai->driver->name, mute, stream);
-
-	if (si_pa->mute == SIPA_DEVICE_MUTE_ON) {
-		pr_info("[debug][%s] %s: pa is mute on, direct return!\n",LOG_FLAG, __func__);
-		return 0;
-	}
-
 	if (mute) {
 		if (stream == SNDRV_PCM_STREAM_PLAYBACK) {
 			si_pa->pstream = 0;
 		} else {
 			si_pa->cstream = 0;
 		}
+		si_pa->sipa_on = false;
 
-		//at the stop, I2c ends earlier than i2s.
-		//if (si_pa->pstream != 0 || si_pa->cstream != 0)
-		if (si_pa->power_mode == false)
+		if (si_pa->pstream != 0 || si_pa->cstream != 0)
 			return 0;
-		
-		si_pa->power_mode = false;
+
 		//cancel_delayed_work_sync(&si_pa->monitor_work);
-		if (sia91xx_smartpa_soft_mute(si_pa)) {
-
-			if (si_pa->chip_type == CHIP_TYPE_SIA5118) {
-				gpio_set_value(si_pa->rst_pin, SIA91XX_LOW_LEVEL);
-			} else {
-				gpio_set_value(si_pa->rst_pin, SIA91XX_HIGH_LEVEL);
-			}
-
-			usleep_range(5000, 6000);
+		if (sia91xx_soft_mute(si_pa)) {
+			gpio_set_value(si_pa->rst_pin, 1);
+			mdelay(5);
 			return -SIPA_ERROR_SOFT_MUTE;
 		}
 	} else {
@@ -436,15 +416,9 @@ int sia91xx_mute(
 		} else {
 			si_pa->cstream = 1;
 		}
+		si_pa->sipa_on = true;
 
-		if (si_pa->power_mode == true)
-			return 0;
-
-		si_pa->power_mode = true;
-		//at the start, I2s starts earlier than i2c.
-		sipa_reg_init(si_pa);
-		sipa_regmap_write_sram(si_pa);
-		if (sia91xx_smartpa_start(si_pa, stream))
+		if (sia91xx_dsp_start(si_pa, stream))
 			return -SIPA_ERROR_SOFT_MUTE;
 
 		sipa_regmap_check_trimming(si_pa);

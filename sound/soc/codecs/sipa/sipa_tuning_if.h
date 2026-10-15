@@ -28,7 +28,7 @@ struct sipa_cal_opt {
 		uint32_t size, uint8_t *payload);
 };
 
-#define DATA_MAX_LEN       1024
+#define DATA_MAX_LEN       4096
 #define MSG_MAX_SIZE       128
 
 typedef struct dev_comm_data {
@@ -48,21 +48,11 @@ typedef struct dev_comm_data {
         return -EFAULT;                                                     \
     }
 
-#define MAX_SIZE  (10)
-
-typedef struct{
+typedef struct {
+    wait_queue_head_t wq;
     uint8_t data[DATA_MAX_LEN];
     uint32_t len;
     bool flag;
-}myqueue;
-
-typedef struct {
-    myqueue q[MAX_SIZE];
-    uint8_t tail;
-    uint8_t head;
-    uint8_t k;
-    wait_queue_head_t wq;
-    struct mutex lock;
 } sipa_sync_t;
 
 typedef struct {
@@ -70,6 +60,7 @@ typedef struct {
     sipa_sync_t tooldown;
     sipa_sync_t cmdup;
     sipa_sync_t cmddown;
+    struct mutex lock;
 } sipa_turning_t;
 
 enum cal_packet_opt {
@@ -79,6 +70,7 @@ enum cal_packet_opt {
 	OPT_REM_CAL_ID,
 	OPT_GET_CAL_VAL_BY_ADB,
 };
+
 
 #define BOX_NAME_MAX_LEN 50
 typedef struct {

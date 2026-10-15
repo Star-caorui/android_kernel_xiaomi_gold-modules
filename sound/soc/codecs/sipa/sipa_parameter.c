@@ -23,58 +23,16 @@
 #include "sipa_tuning_if.h"
 #include "sipa_parameter.h"
 
-#define LOAD_FW_BY_WORK_DELAY
-#define LOAD_INTERVAL_TIMES 	(2000)
-#define LOAD_FW_RETRIES			(15)
+//#define LOAD_FW_BY_DELAY_WORK
+#define LOAD_TIME_OUT 	(2000)
 
-char *g_fw_name;
 static SIPA_PARAM *sipa_parameters = NULL;
 static uint32_t sipa_fw_loaded = 0;
 static struct mutex sipa_fw_load_lock;
 
 extern int sipa_pending_actions(sipa_dev_t *si_pa);
 
-static void sipa_fw_load_retry(sipa_dev_t *si_pa)
-{
-	si_pa->fw_load_count++;
-	if (si_pa->fw_load_count < LOAD_FW_RETRIES) {
-		queue_delayed_work(si_pa->sipa_wq, 
-			&si_pa->fw_load_work, msecs_to_jiffies(LOAD_INTERVAL_TIMES));
-	} else {
-		pr_err("[  err][%s] %s: load retries failed !\r\n",
-			LOG_FLAG, __func__);
-		si_pa->fw_load_count = 0;
-	}
-}
-
-#if 0
-static void *my_memcpy(void *dest, const void *src, size_t count)
-{  
-	int bytelen = count/sizeof(dest);  	 /*按CPU位宽拷贝*/
-	int slice   = count%sizeof(dest);    /*剩余的按字节拷贝*/
-	unsigned long* d = (unsigned long*)dest;  
-	unsigned long* s = (unsigned long*)src;
-
-	if (((char *)dest > ((char *)src + count)) || (dest < src)) {
-		while (bytelen--) {
-            *d++ = *s++;  
-        } 
-		while (slice--) {
-            *(char *)d++ = *(char *)s++;
-        }
-    } else {  /* overlap重叠 */  
-		char *d_1 = (char *)dest + count - 1; /* 指针位置从末端开始，注意偏置 */
-        char *s_1 = (char *)src + count - 1;
-
-        while (count --) {
-            *d_1-- = *s_1--;
-        }
-    } 
- 	return dest;
-}
-#endif
-
-#ifndef LOAD_FW_BY_WORK_DELAY
+#ifndef LOAD_FW_BY_DELAY_WORK
 static void sipa_container_loaded(
 	const struct firmware *cont,
 	void *context)
@@ -82,19 +40,14 @@ static void sipa_container_loaded(
 	uint32_t sz = 0;
 	const SIPA_PARAM_FW *param = NULL;
 	sipa_dev_t *si_pa = context;
-	void *dest;
 
-	pr_debug("[debug][%s] %s: enter load\r\n", LOG_FLAG, __func__);
-
-	if (NULL == si_pa) {
-		pr_err("[  err][%s] %s: NULL == si_pa \r\n", LOG_FLAG, __func__);
+	if (NULL == cont) {
+		pr_err("[  err][%s] %s: NULL == cont \r\n", LOG_FLAG, __func__);
 		return;
 	}
 
-	if (NULL == cont) {
-		pr_debug("[debug][%s] %s: load fw failed, need retry!\r\n",
-			LOG_FLAG, __func__);
-		sipa_fw_load_retry(si_pa);
+	if (NULL == si_pa) {
+		pr_err("[  err][%s] %s: NULL == si_pa \r\n", LOG_FLAG, __func__);
 		return;
 	}
 
@@ -143,15 +96,17 @@ static void sipa_container_loaded(
 		goto load_error;
 	}
 
-	dest = &sipa_parameters->fw;
-	memcpy(dest, cont->data, sz);
+	/* the header, then the data after it (fw ends in a flexible array) */
+	memcpy(&sipa_parameters->fw, cont->data, sizeof(SIPA_PARAM_FW));
+	memcpy(sipa_parameters->fw.data, cont->data + sizeof(SIPA_PARAM_FW),
+		sz - sizeof(SIPA_PARAM_FW));
 	sipa_fw_loaded = 1;
 
 pending_actions:
 	mutex_unlock(&sipa_fw_load_lock);
 	release_firmware(cont);
+
 	sipa_pending_actions(si_pa);
-	pr_debug("[debug][%s] %s: out load\r\n", LOG_FLAG, __func__);
 	return;
 
 load_error:
@@ -165,34 +120,15 @@ load_error:
 
 	release_firmware(cont);
 }
-
-static void sipa_fw_load_work_routine(struct work_struct *work)
-{
-	sipa_dev_t *si_pa = container_of(work, sipa_dev_t, fw_load_work.work);
-
-	pr_debug("[debug][%s] %s: enter load work routine!\r\n", LOG_FLAG, __func__);
-
-	request_firmware_nowait(
-			THIS_MODULE,
-			FW_ACTION_HOTPLUG,
-			g_fw_name,
-			&(si_pa->pdev->dev),
-			GFP_KERNEL,
-			si_pa,
-			sipa_container_loaded);
-}
-
 #else
-static void sipa_fw_load_work_delay(struct work_struct *work)
+static void sipa_fw_loaded_work(struct work_struct *work)
 {
 	int ret = 0;
 	uint32_t sz = 0;
 	const SIPA_PARAM_FW *param = NULL;
 	sipa_dev_t *si_pa = container_of(work, sipa_dev_t, fw_load_work.work);
 	const struct firmware *cont = NULL;
-	void *dest;
-
-	pr_debug("[debug][%s] %s: enter load\r\n", LOG_FLAG, __func__);
+	char *sipa_fw_name = "sipa.bin";
 
 	if (NULL == si_pa) {
 		pr_err("[  err][%s] %s: NULL == si_pa \r\n", LOG_FLAG, __func__);
@@ -206,13 +142,10 @@ static void sipa_fw_load_work_delay(struct work_struct *work)
 		goto pending_actions;
 	}
 
-	ret = request_firmware(&cont, g_fw_name, &si_pa->pdev->dev);
+	ret = request_firmware(&cont, sipa_fw_name, &si_pa->pdev->dev);
 	if (ret) {
-		pr_debug("[debug][%s] %s: load fw failed, need retry! ret = %d.\r\n",
-			LOG_FLAG, __func__, ret);
-		mutex_unlock(&sipa_fw_load_lock);
-		sipa_fw_load_retry(si_pa);
-		return;
+		pr_err("[  err][%s]: request_firmware err ret = %d\r\n", LOG_FLAG, ret);
+		goto load_error;
 	}
 
 	sz = sizeof(SIPA_PARAM_FW);
@@ -253,15 +186,16 @@ static void sipa_fw_load_work_delay(struct work_struct *work)
 		goto load_error;
 	}
 
-	dest = &sipa_parameters->fw;
-	memcpy(dest, cont->data, sz);
+	/* the header, then the data after it (fw ends in a flexible array) */
+	memcpy(&sipa_parameters->fw, cont->data, sizeof(SIPA_PARAM_FW));
+	memcpy(sipa_parameters->fw.data, cont->data + sizeof(SIPA_PARAM_FW),
+		sz - sizeof(SIPA_PARAM_FW));
 	release_firmware(cont);
 	sipa_fw_loaded = 1;
 
 pending_actions:
 	mutex_unlock(&sipa_fw_load_lock);
 	sipa_pending_actions(si_pa);
-	pr_debug("[debug][%s] %s: out load\r\n", LOG_FLAG, __func__);
 	return;
 
 load_error:
@@ -286,20 +220,26 @@ void sipa_param_load_fw(struct device *dev, char *fwname)
 		return;
 	}
 
+	pr_info("[debug][%s] %s: load fw !\r\n", LOG_FLAG, __func__);
+
 	if (false == load_lock_init_flag) {
 		mutex_init(&sipa_fw_load_lock);
 		load_lock_init_flag = true;
 	}
-	g_fw_name = fwname;
 
-#ifndef LOAD_FW_BY_WORK_DELAY
-	INIT_DELAYED_WORK(&si_pa->fw_load_work, sipa_fw_load_work_routine);
-	queue_delayed_work(si_pa->sipa_wq, 
-		&si_pa->fw_load_work, msecs_to_jiffies(0));
+#ifndef LOAD_FW_BY_DELAY_WORK
+	request_firmware_nowait(
+		THIS_MODULE,
+		FW_ACTION_UEVENT,
+		fwname,
+		dev,
+		GFP_KERNEL,
+		si_pa,
+		sipa_container_loaded);
 #else
-	INIT_DELAYED_WORK(&si_pa->fw_load_work, sipa_fw_load_work_delay);
+	INIT_DELAYED_WORK(&si_pa->fw_load_work, sipa_fw_loaded_work);
 	queue_delayed_work(si_pa->sipa_wq, 
-		&si_pa->fw_load_work, msecs_to_jiffies(LOAD_INTERVAL_TIMES));
+		&si_pa->fw_load_work, msecs_to_jiffies(LOAD_TIME_OUT));
 #endif
 }
 
@@ -414,3 +354,19 @@ bool sipa_param_is_loaded(void)
 	return false;
 }
 
+void sipa_param_print(void)
+{
+	int i = 0;
+
+	if (1 != sipa_fw_loaded || NULL == sipa_parameters) {
+		pr_err("[  err][%s] %s: firmware unload sipa_fw_loaded:%u, sipa_parameters:%p\r\n",
+			LOG_FLAG, __func__, sipa_fw_loaded, sipa_parameters);
+		return;
+	}
+
+	for (i = 0; i < SIPA_CHANNEL_NUM; i++) {
+		SIPA_PARAM_LIST *chip_cfg_list = &sipa_parameters->fw.chip_cfg[i];
+		pr_info("[ info][%s] %s: ch_en[%d](%u) offset:%d num:%d\r\n",
+			LOG_FLAG, __func__, i, sipa_parameters->fw.ch_en[i], chip_cfg_list->offset, chip_cfg_list->num);
+	}
+}

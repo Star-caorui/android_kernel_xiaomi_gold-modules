@@ -17,8 +17,8 @@
 
 #include "sipa_common.h"
 
-#define SIA91XX_LOW_LEVEL					(0)
-#define SIA91XX_HIGH_LEVEL					(1)
+#define SIA91XX_ENABLE_LEVEL				(0)
+#define SIA91XX_DISABLE_LEVEL				(1)
 
 #define SIPA_ERROR_OK  						(0)
 #define SIPA_ERROR_I2C						(1)
@@ -29,13 +29,15 @@
 #define SIPA_ERROR_SOFT_MUTE				(6)
 #define SIPA_ERROR_DEV_START				(7)
 
-#define I2C_RETRIES 						(5)
+#define I2C_RETRIES 						(50)
 #define I2C_RETRY_DELAY 					(5) 		/* ms */
 
 #define TRIGGER_RISING						(0)			/* Rising edge trigger   */
 #define TRIGGER_FALLING						(1)			/* Falling edge trigger  */
+#define MUTE_MODE_EXTERNAL					(0)			/* External soft mute */
+#define MUTE_MODE_INTERNAL					(1)			/* Internal soft mute */
 #define MUTE_RETRIES						(10)
-#define SIA91XX_MAX_PA_START_TRY_COUNT		(5)
+#define SIA91XX_MAX_DSP_START_TRY_COUNT		(5)
 
 #define CHANNEL_NUM_MIN						(1)
 #define CHANNEL_NUM_MAX						(8)
@@ -72,17 +74,9 @@ int sia91xx_set_fmt(struct snd_soc_dai *dai, unsigned int fmt);
 int sia91xx_append_i2c_address(
 	struct device *dev, struct i2c_client *i2c,	struct snd_soc_dapm_widget *widgets,
 	int num_widgets, struct snd_soc_dai_driver *dai_drv, int num_dai);
-int sia91xx_smartpa_start(sipa_dev_t *si_pa, int stream);
-int sia91xx_smartpa_soft_mute(sipa_dev_t *si_pa);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,6,0))
-int sipa_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *id);
-#else
+int sia91xx_dsp_start(sipa_dev_t *si_pa, int stream);
+int sia91xx_soft_mute(sipa_dev_t *si_pa);
 int sipa_i2c_probe(struct i2c_client *i2c);
-#endif
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0))
-int sipa_i2c_remove(struct i2c_client *i2c);
-#else
 void sipa_i2c_remove(struct i2c_client *i2c);
-#endif
 
 #endif /* _SIPA_91XX_H */

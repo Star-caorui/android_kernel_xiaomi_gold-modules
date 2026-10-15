@@ -72,8 +72,8 @@ static const struct reg_map_info reg_map_info_table[] = {
 		.reg_addr_width = 8,
 		.reg_val_width = 8,
 		.chip_id_addr = 0x00,
-		.chip_id_ranges = {{0x60, 0x68}},
-		.chip_id_range_num = 1
+		.chip_id_ranges = {{0x60, 0x68}, {0x6A, 0x6F}},
+		.chip_id_range_num = 2
 	},
 	[CHIP_TYPE_SIA8159A] = {
 		.chip_type = CHIP_TYPE_SIA8159A,
@@ -104,99 +104,61 @@ static const struct reg_map_info reg_map_info_table[] = {
 		.reg_addr_width = 8,
 		.reg_val_width = 16,
 		.chip_id_addr = 0x06,
-		.chip_id_ranges = {{0x6190, 0x6191},{0x6200, 0x6200}},
-		.chip_id_range_num = 2
-	},
-	[CHIP_TYPE_SIA9177] = {
-		.chip_type = CHIP_TYPE_SIA9177,
-		.reg_addr_width = 8,
-		.reg_val_width = 16,
-		.chip_id_addr = 0x06,
-		.chip_id_ranges = {{0x5880, 0x5880},{0x5890, 0x5891},{0x58A0, 0x58A1}},
-		.chip_id_range_num = 3
-	},
-	[CHIP_TYPE_SIA8150] = {
-		.chip_type = CHIP_TYPE_SIA8150,
-		.reg_addr_width = 8,
-		.reg_val_width = 8,
-		.chip_id_addr = 0x00,
-		.chip_id_ranges = {{0x50, 0x50}},
-		.chip_id_range_num = 1
-	},
-	[CHIP_TYPE_SIA9255] = {
-		.chip_type = CHIP_TYPE_SIA9255,
-		.reg_addr_width = 8,
-		.reg_val_width = 16,
-		.chip_id_addr = 0x06,
-		.chip_id_ranges = {{0x4d80, 0x4d80}},
-		.chip_id_range_num = 1
-	},
-	[CHIP_TYPE_SIA815T] = {
-		.chip_type = CHIP_TYPE_SIA815T,
-		.reg_addr_width = 8,
-		.reg_val_width = 8,
-		.chip_id_addr = 0x00,
-		.chip_id_ranges = {{0x6a, 0x6f}},
-		.chip_id_range_num = 1
-	},
-	[CHIP_TYPE_SIA9187] = {
-		.chip_type = CHIP_TYPE_SIA9187,
-		.reg_addr_width = 8,
-		.reg_val_width = 16,
-		.chip_id_addr = 0x06,
-		.chip_id_ranges = {{0x5d80, 0x5d80}},
-		.chip_id_range_num = 1
-	},
-	[CHIP_TYPE_SIA5118] = {
-		.chip_type = CHIP_TYPE_SIA5118,
-		.reg_addr_width = 8,
-		.reg_val_width = 16,
-		.chip_id_addr = 0x00,
-		.chip_id_ranges = {{0x3B00, 0x3B00}},
+		.chip_id_ranges = {{0x6190, 0x6191}},
 		.chip_id_range_num = 1
 	},
 };
 
-int sipa_read_reg(
-	struct regmap *regmap,
+int sia91xx_read_reg16(
+	sipa_dev_t *si_pa,
 	unsigned char subaddress,
-	unsigned int *val)
+	unsigned short *val)
 {
 	unsigned int value;
 	int ret;
 	int retries = I2C_RETRIES;
 
+	if (NULL == si_pa) {
+		pr_err("[  err][%s] %s: si_pa == NULL !!! \r\n", LOG_FLAG, __func__);
+		return -EINVAL;
+	}
+
 retry:
-	ret = regmap_read(regmap, subaddress, &value);
+	ret = regmap_read(si_pa->regmap, subaddress, &value);
 	if (ret < 0) {
-		pr_warn("i2c read error, addr: 0x%x, retries left: %d\n", subaddress, retries);
+		pr_warn("i2c error, retries left: %d\n", retries);
 		if (retries) {
 			retries--;
-			usleep_range(I2C_RETRY_DELAY*1000, I2C_RETRY_DELAY*1000);
+			msleep(I2C_RETRY_DELAY);
 			goto retry;
 		}
 		return -SIPA_ERROR_I2C;
 	}
-	*val = value;
+	*val = value & 0xffff;
 
 	return SIPA_ERROR_OK;
 }
 
-int sipa_write_reg(
-	struct regmap *regmap,
+int sia91xx_write_reg16(
+	sipa_dev_t *si_pa,
 	unsigned char subaddr,
-	unsigned int val)
+	unsigned short val)
 {
 	int ret;
 	int retries = I2C_RETRIES;
 
+	if (NULL == si_pa) {
+		pr_err("[  err][%s] %s: si_pa == NULL !!! \r\n", LOG_FLAG, __func__);
+		return -EINVAL;
+	}
+
 retry:
-	ret = regmap_write(regmap, subaddr, val);
+	ret = regmap_write(si_pa->regmap, subaddr, val);
 	if (ret < 0) {
-		pr_warn("i2c write error, addr: 0x%x, retries left: %d\n", subaddr, retries);
+		pr_warn("i2c error, retries left: %d\n", retries);
 		if (retries) {
 			retries--;
-			usleep_range(I2C_RETRY_DELAY*1000, I2C_RETRY_DELAY*1000);
+			msleep(I2C_RETRY_DELAY);
 			goto retry;
 		}
 		return -SIPA_ERROR_I2C;
@@ -375,7 +337,7 @@ int sipa_regmap_check_chip_id(
 	if (0 != verify_chip_type(ch, chip_type))
 		return -EPERM;
 
-	if (0 != sipa_read_reg(regmap, reg_map_info_table[chip_type].chip_id_addr, &val))
+	if (0 != regmap_read(regmap, reg_map_info_table[chip_type].chip_id_addr, &val))
 		return -1;
 
 	for (i = 0; i < reg_map_info_table[chip_type].chip_id_range_num; i++) {
@@ -445,7 +407,7 @@ void sipa_regmap_defaults(
 
 	init_regs = (SIPA_REG_COMMON *)(data + init_list->offset);
 	for (i = 0; i < init_list->num; i++) {
-		ret = sipa_write_reg(regmap, init_regs[i].addr, init_regs[i].val[scene]);
+		ret = regmap_write(regmap, init_regs[i].addr, init_regs[i].val[scene]);
 		if (0 != ret) {
 			pr_warn("[ warn][%s] %s: ret = %d, chip_type = %u, regmap = %p, addr = 0x%x\r\n",
 				LOG_FLAG, __func__, ret, chip_type, regmap, init_regs[i].addr);
@@ -470,37 +432,32 @@ static int sipa_regmap_proc_1_reg(sipa_dev_t *si_pa,
 
 	switch (reg->action) {
 	case SIPA_REG_READ:
-		if (0 != sipa_read_reg(si_pa->regmap, reg->addr, &val))
+		if (0 != regmap_read(si_pa->regmap, reg->addr, &val))
 			return -EFAULT;
 
 		reg->val[si_pa->scene] = (reg->val[si_pa->scene] & (~reg->mask))
 				| (val & reg->mask);
 
 		if (0 != reg->delay)
-			usleep_range(reg->delay, reg->delay);
-		
-		//support print status val
-		if (reg->addr <= 0x14)
-			pr_info("[ info][%s] %s: addr:0x%x, val:0x%x\n", LOG_FLAG, __func__,
-				reg->addr, val);
+			udelay(reg->delay);
 		break;
 	case SIPA_REG_WRITE:
 		if (full_mask != (reg->mask & full_mask)) {
-			if (0 != sipa_read_reg(si_pa->regmap, reg->addr, &val))
+			if (0 != regmap_read(si_pa->regmap, reg->addr, &val))
 				return -EFAULT;
 
 			val = (val  & (~reg->mask)) | (reg->val[si_pa->scene] & reg->mask);
 		} else
 			val = reg->val[si_pa->scene];
 
-		if (0 != sipa_write_reg(si_pa->regmap, reg->addr, val))
+		if (0 != regmap_write(si_pa->regmap, reg->addr, val))
 			return -EFAULT;
 
 		if (0 != reg->delay)
-			usleep_range(reg->delay, reg->delay);
+			udelay(reg->delay);
 		break;
 	case SIPA_REG_CHECK:
-		if (0 != sipa_read_reg(si_pa->regmap, reg->addr, &val))
+		if (0 != regmap_read(si_pa->regmap, reg->addr, &val))
 			return -EFAULT;
 
 		if ((val & reg->mask) != (reg->val[si_pa->scene] & reg->mask)) {
@@ -510,11 +467,11 @@ static int sipa_regmap_proc_1_reg(sipa_dev_t *si_pa,
 		}
 
 		if (0 != reg->delay)
-			usleep_range(reg->delay, reg->delay);
+			udelay(reg->delay);
 		break;
 	case SIPA_REG_PAD:
 		if (0 != reg->delay)
-			usleep_range(reg->delay, reg->delay);
+			udelay(reg->delay);
 		break;
 	default:
 		return -EINVAL;
@@ -633,12 +590,12 @@ bool sipa_regmap_get_chip_en(
 		return false;
 
 	// can use SIPA_REG_CHECK action to do this
-	if (0 != sipa_read_reg(si_pa->regmap, reg_en->addr, &val))
+	if (0 != regmap_read(si_pa->regmap, reg_en->addr, &val))
 		return false;
 
 	if ((val & reg_en->mask) == (reg_en->val & reg_en->mask))
 		return true;
-	pr_info("[ info][%s] %s: addr:0x%x val:0x%x mask:%x  fw_val:%x  \r\n",
+	pr_info("[  info][%s] %s: addr:0x%x val:0x%x mask:%x  fw_val:%x  \r\n",
 		LOG_FLAG, __func__, reg_en->addr, val, reg_en->mask, reg_en->val);
 	return false;
 }
@@ -677,13 +634,13 @@ void sipa_regmap_set_pvdd_limit(
 	else if (cp_ovp > pvdd_limit->valid_range.end)
 		cp_ovp = pvdd_limit->valid_range.end;
 
-	if (0 != sipa_read_reg(regmap, pvdd_limit->reg.addr, &pvdd_limit->reg.val))
+	if (0 != regmap_read(regmap, pvdd_limit->reg.addr, &pvdd_limit->reg.val))
 		return;
 
 	pvdd_limit->reg.val = (pvdd_limit->reg.val	& (~pvdd_limit->reg.mask)) | 
 		((cp_ovp << pvdd_limit->bit_offset) & pvdd_limit->reg.mask);
 
-	if (0 != sipa_write_reg(regmap, pvdd_limit->reg.addr, pvdd_limit->reg.val))
+	if (0 != regmap_write(regmap, pvdd_limit->reg.addr, pvdd_limit->reg.val))
 		return;
 }
 
@@ -745,7 +702,6 @@ void sipa_regmap_check_trimming(
 	uint32_t trim_bytes = 0;
 	uint16_t crc = 0, crc_cal = 0;
 	uint32_t ret = -1;
-	uint32_t i;
 
 	if (NULL == si_pa)
 		return;
@@ -761,7 +717,7 @@ void sipa_regmap_check_trimming(
 	}
 
 	/* wait reading trimming data to reg */
-	usleep_range(1000, 2000);
+	mdelay(1);
 
 	val_width = chip_cfg.reg_val_width;
 	reg_list = &chip_cfg.trim_regs.efuse;
@@ -818,144 +774,15 @@ void sipa_regmap_check_trimming(
 
 	si_pa->pa_status &= 0xFE; //clear status;
 	if (crc_cal != crc) {
-		pr_err("[  err][%s] %s: ch%d check trim crc failed! crc_cal = 0x%x\r\n", 
-			LOG_FLAG, __func__, si_pa->channel_num, crc_cal);
+		pr_err("[  err][%s] %s: ch%d check trim crc failed! \r\n", 
+			LOG_FLAG, __func__, si_pa->channel_num);
 
 		si_pa->pa_status = (1 << 0); //digitail pa iv invalid;
 
 		reg_list = &chip_cfg.trim_regs.default_set;
 		regs = (SIPA_REG_PROC *)(data + reg_list->offset);
 		sipa_regmap_proc_1_reg_list(si_pa, reg_list, regs, val_width);
-
-		return;
-	} else {
-		if (si_pa->chip_type == CHIP_TYPE_SIA8159) {
-			reg_list = &chip_cfg.trim_regs.default_set;
-			regs = (SIPA_REG_PROC *)(data + reg_list->offset);
-
-			for (i = 0; i < reg_list->num; i++) {
-				if (regs[i].addr == 0x20)
-					regs[i].val[si_pa->scene] = trim[2];
-
-				if (regs[i].addr == 0x21)
-					regs[i].val[si_pa->scene] = trim[1];
-				
-				if (regs[i].addr == 0x22) {
-					regs[i].val[si_pa->scene] = trim[0];
-					if (trim[0] >= 0x20)
-						regs[i].val[si_pa->scene] -= 0x20;
-					else
-						regs[i].val[si_pa->scene] &= 0x0F;
-				}
-
-				ret = sipa_regmap_proc_1_reg(si_pa, &regs[i], val_width);
-				if (0 != ret) {
-					pr_err("[  err][%s] %s: ret = %d, chip_type = %u, regmap = %p, addr = 0x%x\r\n",
-						LOG_FLAG, __func__, ret, si_pa->chip_type, si_pa->regmap, regs[i].addr);
-					return;
-				}
-			}
-		}
 	}
-}
-
-bool sipa_regmap_write_sram(
-	sipa_dev_t *si_pa)
-{
-	SIPA_CHIP_CFG chip_cfg;
-	uint8_t *data;
-	const SIPA_PARAM_LIST *sram_list;
-	SIPA_REG_COMMON *sram_data = NULL;
-	uint8_t ret, i;
-	uint32_t cfg_addr;
-	uint32_t data_addr;
-	uint16_t val_arry[2] = {0};
-
-	if (NULL == si_pa)
-		return false;
-
-	if (NULL == si_pa->regmap) {
-		pr_warn("[ warn][%s] %s: NULL == regmap \r\n",
-			LOG_FLAG, __func__);
-		return false;
-	}
-
-	if (AUDIO_SCENE_NUM <= si_pa->scene) {
-		pr_err("[  err][%s] %s: scene = %u, AUDIO_SCENE_NUM = %u \r\n",
-			LOG_FLAG, __func__, si_pa->scene, AUDIO_SCENE_NUM);
-		return false;
-	}
-
-	if (SIPA_CHANNEL_NUM <= si_pa->channel_num) {
-		pr_err("[  err][%s] %s: channel_num = %u, SIPA_CHANNEL_NUM = %u \r\n",
-			LOG_FLAG, __func__, si_pa->channel_num, SIPA_CHANNEL_NUM);
-		return false;
-	}
-
-	if (0 != verify_chip_type(si_pa->channel_num, si_pa->chip_type))
-		return false;
-
-	if (si_pa->chip_type != CHIP_TYPE_SIA9255)
-		return true;
-
-	data = sipa_param_read_chip_cfg(si_pa->channel_num, si_pa->chip_type, &chip_cfg);
-	if (NULL == data) {
-		pr_err("[  err][%s] %s: fw unloaded \r\n", 
-			LOG_FLAG, __func__);
-		return false;
-	}
-
-	sram_list = &chip_cfg.sram_ops.sram;
-	cfg_addr  = chip_cfg.sram_ops.cfg_addr;
-	data_addr = chip_cfg.sram_ops.data_addr;
-
-	sram_data = (SIPA_REG_COMMON *)(data + sram_list->offset);
-	if (sram_data == NULL) {
-		pr_err("[  err][%s] %s: channel %d sram_data is NULL \r\n",
-			LOG_FLAG, __func__, si_pa->channel_num);
-		return false;
-	}
-	for (i = 0; i < sram_list->num; i++) {
-		//SRAM data bit width is 21 .  |<----------sram_data--------->|
-		//								MSB[7:0] - LSB[7:0] - MSB[7:0] - LSB[7:0]
-		//eg.   val = 80e2d000
-
-		memset(val_arry, 0, sizeof(val_arry));
-		val_arry[0] = sram_data[i].val[si_pa->scene] >> 16;
-		val_arry[1] = sram_data[i].val[si_pa->scene];
-
-		//high word write
-		ret = regmap_write(si_pa->regmap, cfg_addr, (sram_data[i].addr | 0x80));
-		if (0 != ret) {
-			pr_warn("[ warn][%s] %s: ret = %d, chip_type = %u, regmap = %p, addr = 0x%x, value = %d\r\n",
-				LOG_FLAG, __func__, ret, si_pa->chip_type, si_pa->regmap, cfg_addr, sram_data[i].addr);
-			continue;
-		}
-
-		ret = regmap_write(si_pa->regmap, data_addr, val_arry[0]);
-		if (0 != ret) {
-			pr_warn("[ warn][%s] %s: ret = %d, chip_type = %u, regmap = %p, val = 0x%x\r\n",
-				LOG_FLAG, __func__, ret, si_pa->chip_type, si_pa->regmap, val_arry[0]);
-			continue;
-		}
-
-		//low word write
-		ret = regmap_write(si_pa->regmap, cfg_addr, sram_data[i].addr);
-		if (0 != ret) {
-			pr_warn("[ warn][%s] %s: ret = %d, chip_type = %u, regmap = %p, addr = 0x%x, value = %d\r\n",
-				LOG_FLAG, __func__, ret, si_pa->chip_type, si_pa->regmap, cfg_addr, sram_data[i].addr);
-			continue;
-		}
-
-		ret = regmap_write(si_pa->regmap, data_addr, val_arry[1]);
-		if (0 != ret) {
-			pr_warn("[ warn][%s] %s: ret = %d, chip_type = %u, regmap = %p, val = 0x%x\r\n",
-				LOG_FLAG, __func__, ret, si_pa->chip_type, si_pa->regmap, val_arry[1]);
-			continue;
-		}
-	}
-
-	return true;
 }
 /********************************************************************
  * end - sia81xx reg map opt functions

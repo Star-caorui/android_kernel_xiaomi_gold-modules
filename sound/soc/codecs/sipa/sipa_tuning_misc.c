@@ -63,10 +63,7 @@ static int __init sipa_tuning_if_init(void)
     init_waitqueue_head(&priv->tooldown.wq);
     init_waitqueue_head(&priv->cmdup.wq);
     init_waitqueue_head(&priv->cmddown.wq);
-	mutex_init(&priv->toolup.lock);
-    mutex_init(&priv->tooldown.lock);
-    mutex_init(&priv->cmdup.lock);
-    mutex_init(&priv->cmddown.lock);
+	mutex_init(&priv->lock);
 
 	ret = misc_register(&sipa_cmd_dev);
 	if (ret) {
@@ -99,11 +96,7 @@ static void __exit sipa_tuning_if_exit(void)
 	pr_info("[ info] %s: run\n", __func__);
 
     if (g_sipa_turning) {
-        mutex_destroy(&(g_sipa_turning->toolup.lock));
-        mutex_destroy(&(g_sipa_turning->tooldown.lock));
-        mutex_destroy(&(g_sipa_turning->cmdup.lock));
-        mutex_destroy(&(g_sipa_turning->cmddown.lock));
-
+        mutex_destroy(&(g_sipa_turning->lock));
         kfree(g_sipa_turning);
 		g_sipa_turning = NULL;
     }

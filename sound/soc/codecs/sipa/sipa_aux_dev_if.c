@@ -403,26 +403,3 @@ int soc_codec_conf_sia91xx(
 	return 0;
 }
 EXPORT_SYMBOL(soc_codec_conf_sia91xx);
-
-int soc_codec_conf_sipa(
-	struct platform_device *pdev,
-	struct snd_soc_card *card) {
-
-	int ret = 0;
-	u32 is_digital_pa = 0;
-
-	ret = of_property_read_u32(pdev->dev.of_node,
-				"si,is_digital_pa", &is_digital_pa);
-	if (0 != ret) {
-		pr_info("[ info][%s] : node is not exist. ret = %d !!! \r\n", __func__, ret);
-	}
-
-	if (is_digital_pa) {
-		ret = soc_codec_conf_sia91xx(pdev, card);
-	} else {
-		ret = soc_aux_init_only_sia81xx(pdev, card);
-	}
-
-	return ret;
-}
-EXPORT_SYMBOL(soc_codec_conf_sipa);

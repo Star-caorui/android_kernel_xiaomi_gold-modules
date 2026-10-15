@@ -127,17 +127,16 @@ void sipa_regmap_set_pvdd_limit(
 
 void sipa_regmap_check_trimming(sipa_dev_t *si_pa);
 
-int sipa_read_reg(struct regmap *regmap, unsigned char subaddress,
-   unsigned int *val);
-int sipa_write_reg(struct regmap *regmap, unsigned char subaddr,
-	unsigned int val);
+int sia91xx_read_reg16(sipa_dev_t *si_pa, unsigned char subaddress,
+   unsigned short *val);
+int sia91xx_write_reg16(sipa_dev_t *si_pa, unsigned char subaddr,
+	unsigned short val);
 int sia91xx_write_reg16_bit_pos(sipa_dev_t *si_pa,
 	uint8_t subaddr, uint16_t Val, uint8_t pos, uint8_t len);
 int sia91xx_write_reg16_bit_msk(sipa_dev_t *si_pa,
 	uint8_t subaddr, uint16_t msk, bool stat);
 
 int sipa_reg_init(struct sipa_dev_s *si_pa);
-bool sipa_regmap_write_sram(sipa_dev_t *si_pa);
 
 #endif /* _SIPA_REGMAP_H */
 

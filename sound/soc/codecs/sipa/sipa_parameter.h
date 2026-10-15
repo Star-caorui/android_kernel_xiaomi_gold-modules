@@ -16,12 +16,12 @@
 #define _SIPA_PARAMETER_H
 
 #include <linux/device.h>
-#include <linux/version.h>
+
 #include "sipa_common.h"
 
 #define SIPA_FW_VER_MAIN		(1)
 #define SIPA_FW_VER_SUB			(0)
-#define SIPA_FW_VER_REV			(5)
+#define SIPA_FW_VER_REV			(4)
 #define SIPA_FW_VER				\
 	((SIPA_FW_VER_MAIN << 16) | (SIPA_FW_VER_SUB << 8) | (SIPA_FW_VER_REV))
 
@@ -40,11 +40,12 @@ typedef struct __sipa_param_cal_spk {
 	int32_t a;
 } __packed SIPA_PARAM_CAL_SPK;
 
-typedef struct __sipa_param_lp_protection_param {
+typedef struct __sipa_param_spk_model_param {
 	int32_t f0;
-	int32_t lpx;
-	int32_t re;
-} __packed SIPA_PARAM_LP_PROTECT_PARAM;
+	int32_t q;
+	int32_t xthresh;
+	int32_t xthresh_rdc;
+} __packed SIPA_PARAM_SPK_MODEL_PARAM;
 
 typedef struct __sipa_val_range {
 	uint32_t begin;
@@ -113,12 +114,6 @@ typedef struct __sipa_trim_regs {
 	SIPA_PARAM_LIST default_set;
 } __packed SIPA_TRIM_REGS;
 
-typedef struct __sipa_sram_ops {
-	uint32_t cfg_addr;
-	uint32_t data_addr;
-	SIPA_PARAM_LIST sram;
-} __packed SIPA_SRAM;
-
 /* chip related */
 typedef struct __sipa_chip_cfg {
 	uint32_t chip_type;
@@ -129,12 +124,11 @@ typedef struct __sipa_chip_cfg {
 
 	uint32_t owi_mode[AUDIO_SCENE_NUM];
 	SIPA_REG chip_en; 
-	SIPA_PARAM_LIST init;			//SIPA_REG_COMMON
-	SIPA_PARAM_LIST startup;		//SIPA_REG_PROC
-	SIPA_PARAM_LIST shutdown;		//SIPA_REG_PROC
+	SIPA_PARAM_LIST init;
+	SIPA_PARAM_LIST startup;
+	SIPA_PARAM_LIST shutdown;
 	SIPA_TRIM_REGS trim_regs;
 	SIPA_FUNC0_TO_REG pvdd_limit;	//SIPA_PARAM_LIST pvdd_limit;
-	SIPA_SRAM sram_ops;
 
 	/* move from dts */
 	uint32_t en_dyn_ud_vdd;
@@ -158,14 +152,14 @@ typedef struct __sipa_param_writeable {
 	uint32_t crc;
 	uint32_t version;
 	SIPA_PARAM_CAL_SPK cal_spk[SIPA_CHANNEL_NUM];
-	SIPA_PARAM_LP_PROTECT_PARAM lp_protect[SIPA_CHANNEL_NUM];
+	SIPA_PARAM_SPK_MODEL_PARAM spk_model[SIPA_CHANNEL_NUM];
 } __packed SIPA_PARAM_WRITEABLE;
 
 typedef struct __sipa_param_fw {
 	uint32_t crc;
 	uint32_t version;
 	uint32_t ch_en[SIPA_CHANNEL_NUM]; /* 0:diable, 1:enable, other:undefine */
-	SIPA_PARAM_LIST chip_cfg[SIPA_CHANNEL_NUM];	/* SIPA_CHIP_CFG, for multi SI PA  compat*/
+	SIPA_PARAM_LIST chip_cfg[SIPA_CHANNEL_NUM];	/* for multi SI PA  compat*/
 	SIPA_EXTRA_CFG extra_cfg[SIPA_CHANNEL_NUM];
 	uint32_t data_size;
 	uint8_t data[];
