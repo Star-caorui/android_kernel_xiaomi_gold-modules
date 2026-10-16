@@ -65,6 +65,15 @@
 
 #include "mtk_charger.h"
 #include "mtk_battery.h"
+/*N17 code for HQ-308229 by xm tianye9 at 2023/07/20 start*/
+#include "mtk_pe5.h"
+/*N17 code for HQ-308229 by xm tianye9 at 2023/07/20 end*/
+/*N17 code for HQ-291625 by miaozhichao at 2023/04/28 start*/
+#include <tcpm.h>
+/*N17 code for HQ-291625 by miaozhichao at 2023/04/28 end*/
+
+/* Never set, in gold's tree and stock's: smart_batt_set_diff_fv() does nothing */
+static struct mtk_charger *pinfo;
 
 struct tag_bootmode {
 	u32 size;
@@ -72,11 +81,180 @@ struct tag_bootmode {
 	u32 bootmode;
 	u32 boottype;
 };
+/* N17 code for HQ-292280 by tongjiacheng at 20230610 start */
 
+/*N17 code for thermal_board_temp by xm liluting at 2023/07/18 start*/
+SRCU_NOTIFIER_HEAD(charger_notifier);
+EXPORT_SYMBOL_GPL(charger_notifier);
+
+int charger_reg_notifier(struct notifier_block *nb)
+{
+	return srcu_notifier_chain_register(&charger_notifier, nb);
+}
+EXPORT_SYMBOL_GPL(charger_reg_notifier);
+
+int charger_unreg_notifier(struct notifier_block *nb)
+{
+	return srcu_notifier_chain_unregister(&charger_notifier, nb);
+}
+EXPORT_SYMBOL_GPL(charger_unreg_notifier);
+
+int charger_notifier_call_cnain(unsigned long event, int val)
+{
+	return srcu_notifier_call_chain(&charger_notifier, event, &val);
+}
+EXPORT_SYMBOL_GPL(charger_notifier_call_cnain);
+/*N17 code for thermal_board_temp by xm liluting at 2023/07/18 end*/
+
+/* N17 code for HQ-319580 by p-xuyechen at 2023/08/21 */
+bool is_disable_charger(struct mtk_charger *info);
+
+int charger_manager_get_thermal_level(void)
+{
+	struct power_supply *psy;
+	static struct mtk_charger *info;
+
+	if (info == NULL) {
+		psy = power_supply_get_by_name("mtk-master-charger");
+		if  (psy == NULL)
+			return -PTR_ERR(psy);
+		else {
+			info = (struct mtk_charger *)power_supply_get_drvdata(psy);
+			return info->thermal_level;
+		}
+	}
+	else
+		return info->thermal_level;
+}
+EXPORT_SYMBOL(charger_manager_get_thermal_level);
+
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 start*/
+static void monitor_smart_chg(struct mtk_charger *info)
+{
+/*N17 code for HQ-306722 by xm tianye9 at 2023/07/08 start*/
+	struct mtk_battery *gm = NULL;
+/*N17 code for HQ-306722 by xm tianye9 at 2023/07/08 end*/
+/*N17 code for HQ-308229 by xm tianye9 at 2023/07/20 start*/
+	struct chg_alg_device *alg = NULL;
+	struct pe50_algo_info *pinfo = NULL;
+/*N17 code for HQ-308229 by xm tianye9 at 2023/07/20 end*/
+	struct power_supply *psy = NULL;
+/*N17 code for HQ-308735 by xm tianye9 at 2023/07/25 start*/
+	int g_ui_soc = 50;
+	static int g_smart_soc = 50;
+/*N17 code for HQ-308735 by xm tianye9 at 2023/07/25 end*/
+
+/*N17 code for HQ-308229 by xm tianye9 at 2023/07/20 start*/
+	alg = get_chg_alg_by_name("pe5");
+
+	if (alg == NULL){
+		chr_err("get pe5 fail\n");
+		return;
+	}
+/*N17 code for HQ-308229 by xm tianye9 at 2023/07/20 end*/
+	psy = power_supply_get_by_name("battery");
+	if (psy != NULL) {
+		gm = mtk_battery_from_psy(psy);
+/*N17 code for HQ-306722 by xm tianye9 at 2023/07/08 start*/
+		if (gm != NULL){
+			chr_err("N17 get mtk_battery drvdata success in %s\n", __func__);
+		}
+	} else
+		return;
+
+/*N17 code for HQ-308735 by xm tianye9 at 2023/07/25 start*/
+	g_ui_soc = get_uisoc(info);
+/*N17 code for HQ-308735 by xm tianye9 at 2023/07/25 end*/
+
+/*N17 code for HQ-308229 by xm tianye9 at 2023/07/20 start*/
+	pinfo = chg_alg_dev_get_drvdata(alg);
+/*N17 code for HQ-308229 by xm tianye9 at 2023/07/20 end*/
+
+/*N17 code for HQ-308735 by xm tianye9 at 2023/07/25 start*/
+	chr_err("N17 call monitor_smart_chg, en_ret = %d, fun_val = %d, active_status = %d, smart_soc = %d, ui_soc =%d\n",
+		gm->smart_charge[SMART_CHG_NAVIGATION].en_ret,
+		gm->smart_charge[SMART_CHG_NAVIGATION].func_val,
+		gm->smart_charge[SMART_CHG_NAVIGATION].active_status,
+		g_smart_soc,
+		g_ui_soc);
+/*N17 code for HQ-308735 by xm tianye9 at 2023/07/25 end*/
+/*N17 code for HQ-308735 by xm tianye9 at 2023/07/25 start*/
+/*N17 code for HQ-309838 by xm tianye9 at 2023/08/02 start*/
+	if(gm->smart_charge[SMART_CHG_NAVIGATION].en_ret && g_ui_soc >= gm->smart_charge[SMART_CHG_NAVIGATION].func_val && !gm->smart_charge[SMART_CHG_NAVIGATION].active_status)
+	{
+		gm->smart_charge[SMART_CHG_NAVIGATION].active_status = true;
+		g_smart_soc = gm->smart_charge[SMART_CHG_NAVIGATION].func_val;
+		charger_dev_enable(info->chg1_dev, false);
+		chr_err("N17 monitor disable charger,soc >= %d\n", gm->smart_charge[SMART_CHG_NAVIGATION].func_val);
+	}
+/*N17 code for HQ-319856 by xm tianye9 at 2023/08/21 start*/
+	else if((((!gm->smart_charge[SMART_CHG_NAVIGATION].en_ret || g_ui_soc <= gm->smart_charge[SMART_CHG_NAVIGATION].func_val - 5) && gm->smart_charge[SMART_CHG_NAVIGATION].active_status) ||
+		(!gm->smart_charge[SMART_CHG_NAVIGATION].en_ret && pinfo->cp_stop_flag && !gm->smart_charge[SMART_CHG_NAVIGATION].active_status)) &&
+		/* N17 code for HQ-319580 by p-xuyechen at 2023/08/21 */
+		(is_disable_charger(info) != true)
+		/*N17 code for HQ-314179 by hankang at 2023/08/31*/
+		&& info->sw_jeita.charging == true)
+	{
+/*N17 code for HQ-319856 by xm tianye9 at 2023/08/21 end*/
+/*N17 code for HQ-308735 by xm tianye9 at 2023/07/25 end*/
+		gm->smart_charge[SMART_CHG_NAVIGATION].active_status = false;
+		charger_dev_enable(info->chg1_dev, true);
+/*N17 code for HQ-308229 by xm tianye9 at 2023/07/20 start*/
+		if (pinfo->cp_stop_flag){
+			chg_alg_cp_statemachine_restart(alg, false);
+			chg_alg_start_algo(alg);
+			chr_err("n17:wake up cp state machine\n");
+		}
+/*N17 code for HQ-308229 by xm tianye9 at 2023/07/20 end*/
+		chr_err("N17 monitor enable charger, soc <= %d\n", gm->smart_charge[SMART_CHG_NAVIGATION].func_val - 5);
+/*N17 code for HQ-309838 by xm tianye9 at 2023/08/02 end*/
+/*N17 code for HQ-306722 by xm tianye9 at 2023/07/08 end*/
+	}
+
+/*N17 code for low_fast by xm liluting at 2023/07/07 start*/
+        if(gm->smart_charge[SMART_CHG_LOW_FAST].en_ret)
+	{
+                chr_err("N17 set smart_charge[SMART_CHG_LOW_FAST].en_ret = %d, enable low_fast\n", gm->smart_charge[SMART_CHG_LOW_FAST].en_ret);
+	}
+	else if(!gm->smart_charge[SMART_CHG_LOW_FAST].en_ret)
+	{
+		gm->smart_charge[SMART_CHG_LOW_FAST].active_status = false;
+                chr_err("N17 set smart_charge[SMART_CHG_LOW_FAST].en_ret = %d, enable low_fast\n", gm->smart_charge[SMART_CHG_LOW_FAST].en_ret);
+	}
+/*N17 code for low_fast by xm liluting at 2023/07/07 end*/
+}
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 end*/
+
+void charger_manager_set_thermal_level(int level)
+{
+	struct power_supply *psy;
+	static struct mtk_charger *info;
+
+	if (info == NULL) {
+		psy = power_supply_get_by_name("mtk-master-charger");
+		if  (psy == NULL)
+			return;
+		else
+			info = (struct mtk_charger *)power_supply_get_drvdata(psy);
+	}
+/* N17 code for HQ-292280 by tongjiacheng at 20230613 start */
+	chr_err("curr thermal level:%d, new level:%d, pe5 state:%s\n",
+			info->thermal_level, level,
+			chg_alg_is_algo_running(info->alg[0]) ? "running" : "stop");
+/* N17 code for HQ-292280 by tongjiacheng at 20230613 end */
+	if (level != info->thermal_level) {
+		info->thermal_level = level;
+		_wake_up_charger(info);			//wake up charger
+	}
+}
+EXPORT_SYMBOL(charger_manager_set_thermal_level);
+/* N17 code for HQ-292280 by tongjiacheng at 20230610 end */
 #ifdef MODULE
 static char __chg_cmdline[COMMAND_LINE_SIZE];
 static char *chg_cmdline = __chg_cmdline;
-
+/*N17 code for HQ-291625 by miaozhichao at 2023/04/28 start*/
+static void usbpd_mi_vdm_received_cb(struct mtk_charger *pinfo, struct tcp_ny_cvdm cvdm);
+/*N17 code for HQ-291625 by miaozhichao at 2023/04/28 end*/
 const char *chg_get_cmd(void)
 {
 	struct device_node *of_chosen = NULL;
@@ -165,6 +343,7 @@ void _wake_up_charger(struct mtk_charger *info)
 	info->charger_thread_timeout = true;
 	wake_up_interruptible(&info->wait_que);
 }
+EXPORT_SYMBOL(_wake_up_charger);
 
 bool is_disable_charger(struct mtk_charger *info)
 {
@@ -194,6 +373,7 @@ int mtk_charger_notifier(struct mtk_charger *info, int event)
 static void mtk_charger_parse_dt(struct mtk_charger *info,
 				struct device *dev)
 {
+	int ret, i;
 	struct device_node *np = dev->of_node;
 	u32 val = 0;
 	struct device_node *boot_node = NULL;
@@ -317,18 +497,32 @@ static void mtk_charger_parse_dt(struct mtk_charger *info,
 	}
 	chr_err("enable_vbat_mon:%d\n", info->enable_vbat_mon);
 
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 start*/
 	/* sw jeita */
 	info->enable_sw_jeita = of_property_read_bool(np, "enable_sw_jeita")
 		|| of_property_read_bool(np, "enable-sw-jeita");
-
-	if (of_property_read_u32(np, "jeita_temp_above_t4_cv", &val) >= 0)
-		info->data.jeita_temp_above_t4_cv = val;
-	else if (of_property_read_u32(np, "jeita-temp-above-t4-cv", &val) >= 0)
-		info->data.jeita_temp_above_t4_cv = val;
+	if (of_property_read_u32(np, "jeita_temp_above_t6_cv", &val) >= 0)
+		info->data.jeita_temp_above_t6_cv = val;
 	else {
-		chr_err("use default JEITA_TEMP_ABOVE_T4_CV:%d\n",
-			JEITA_TEMP_ABOVE_T4_CV);
-		info->data.jeita_temp_above_t4_cv = JEITA_TEMP_ABOVE_T4_CV;
+		chr_err("use default JEITA_TEMP_ABOVE_T6_CV:%d\n",
+			JEITA_TEMP_ABOVE_T6_CV);
+		info->data.jeita_temp_above_t6_cv = JEITA_TEMP_ABOVE_T6_CV;
+	}
+
+	if (of_property_read_u32(np, "jeita_temp_t5_to_t6_cv", &val) >= 0)
+		info->data.jeita_temp_t5_to_t6_cv = val;
+	else {
+		chr_err("use default JEITA_TEMP_T5_TO_T6_CV:%d\n",
+			JEITA_TEMP_T5_TO_T6_CV);
+		info->data.jeita_temp_t5_to_t6_cv = JEITA_TEMP_T5_TO_T6_CV;
+	}
+
+	if (of_property_read_u32(np, "jeita_temp_t4_to_t5_cv", &val) >= 0)
+		info->data.jeita_temp_t4_to_t5_cv = val;
+	else {
+		chr_err("use default JEITA_TEMP_T4_TO_T5_CV:%d\n",
+			JEITA_TEMP_T4_TO_T5_CV);
+		info->data.jeita_temp_t4_to_t5_cv = JEITA_TEMP_T4_TO_T5_CV;
 	}
 
 	if (of_property_read_u32(np, "jeita_temp_t3_to_t4_cv", &val) >= 0)
@@ -373,7 +567,7 @@ static void mtk_charger_parse_dt(struct mtk_charger *info,
 
 	if (of_property_read_u32(np, "jeita_temp_below_t0_cv", &val) >= 0)
 		info->data.jeita_temp_below_t0_cv = val;
-	if (of_property_read_u32(np, "jeita-temp-below-t0-cv", &val) >= 0)
+	else if (of_property_read_u32(np, "jeita-temp-below-t0-cv", &val) >= 0)
 		info->data.jeita_temp_below_t0_cv = val;
 	else {
 		chr_err("use default JEITA_TEMP_BELOW_T0_CV:%d\n",
@@ -381,121 +575,62 @@ static void mtk_charger_parse_dt(struct mtk_charger *info,
 		info->data.jeita_temp_below_t0_cv = JEITA_TEMP_BELOW_T0_CV;
 	}
 
-	if (of_property_read_u32(np, "temp_t4_thres", &val) >= 0)
-		info->data.temp_t4_thres = val;
-	else if (of_property_read_u32(np, "temp-t4-thres", &val) >= 0)
-		info->data.temp_t4_thres = val;
+	if (of_property_read_u32(np, "jeita_temp_t5_to_t6_cc", &val) >= 0)
+		info->data.jeita_temp_t5_to_t6_cc = val;
 	else {
-		chr_err("use default TEMP_T4_THRES:%d\n",
-			TEMP_T4_THRES);
-		info->data.temp_t4_thres = TEMP_T4_THRES;
+		chr_err("use default JEITA_TEMP_T5_TO_T6_CC:%d\n",
+			JEITA_TEMP_T5_TO_T6_CC);
+		info->data.jeita_temp_t5_to_t6_cc = JEITA_TEMP_T5_TO_T6_CC;
 	}
 
-	if (of_property_read_u32(np, "temp_t4_thres_minus_x_degree", &val) >= 0)
-		info->data.temp_t4_thres_minus_x_degree = val;
-	else if (of_property_read_u32(np, "temp-t4-thres-minus-x-degree", &val) >= 0)
-		info->data.temp_t4_thres_minus_x_degree = val;
+	if (of_property_read_u32(np, "jeita_temp_t4_to_t5_cc", &val) >= 0)
+		info->data.jeita_temp_t4_to_t5_cc = val;
 	else {
-		chr_err("use default TEMP_T4_THRES_MINUS_X_DEGREE:%d\n",
-			TEMP_T4_THRES_MINUS_X_DEGREE);
-		info->data.temp_t4_thres_minus_x_degree =
-					TEMP_T4_THRES_MINUS_X_DEGREE;
+		chr_err("use default JEITA_TEMP_T4_TO_T5_CC:%d\n",
+			JEITA_TEMP_T4_TO_T5_CC);
+		info->data.jeita_temp_t4_to_t5_cc = JEITA_TEMP_T4_TO_T5_CC;
 	}
 
-	if (of_property_read_u32(np, "temp_t3_thres", &val) >= 0)
-		info->data.temp_t3_thres = val;
-	else if (of_property_read_u32(np, "temp-t3-thres", &val) >= 0)
-		info->data.temp_t3_thres = val;
+	if (of_property_read_u32(np, "jeita_temp_t3_to_t4_cc", &val) >= 0)
+		info->data.jeita_temp_t3_to_t4_cc = val;
 	else {
-		chr_err("use default TEMP_T3_THRES:%d\n",
-			TEMP_T3_THRES);
-		info->data.temp_t3_thres = TEMP_T3_THRES;
+		chr_err("use default JEITA_TEMP_T3_TO_T4_CC:%d\n",
+			JEITA_TEMP_T3_TO_T4_CC);
+		info->data.jeita_temp_t3_to_t4_cc = JEITA_TEMP_T3_TO_T4_CC;
 	}
 
-	if (of_property_read_u32(np, "temp_t3_thres_minus_x_degree", &val) >= 0)
-		info->data.temp_t3_thres_minus_x_degree = val;
-	else if (of_property_read_u32(np, "temp-t3-thres-minus-x-degree", &val) >= 0)
-		info->data.temp_t3_thres_minus_x_degree = val;
+	if (of_property_read_u32(np, "jeita_temp_t2_to_t3_cc", &val) >= 0)
+		info->data.jeita_temp_t2_to_t3_cc = val;
 	else {
-		chr_err("use default TEMP_T3_THRES_MINUS_X_DEGREE:%d\n",
-			TEMP_T3_THRES_MINUS_X_DEGREE);
-		info->data.temp_t3_thres_minus_x_degree =
-					TEMP_T3_THRES_MINUS_X_DEGREE;
+		chr_err("use default JEITA_TEMP_T2_TO_T3_CC:%d\n",
+			JEITA_TEMP_T2_TO_T3_CC);
+		info->data.jeita_temp_t2_to_t3_cc = JEITA_TEMP_T2_TO_T3_CC;
 	}
 
-	if (of_property_read_u32(np, "temp_t2_thres", &val) >= 0)
-		info->data.temp_t2_thres = val;
-	else if (of_property_read_u32(np, "temp-t2-thres", &val) >= 0)
-		info->data.temp_t2_thres = val;
+	if (of_property_read_u32(np, "jeita_temp_t1_to_t2_cc", &val) >= 0)
+		info->data.jeita_temp_t1_to_t2_cc = val;
 	else {
-		chr_err("use default TEMP_T2_THRES:%d\n",
-			TEMP_T2_THRES);
-		info->data.temp_t2_thres = TEMP_T2_THRES;
+		chr_err("use default JEITA_TEMP_T1_TO_T2_CC:%d\n",
+			JEITA_TEMP_T1_TO_T2_CC);
+		info->data.jeita_temp_t1_to_t2_cc = JEITA_TEMP_T1_TO_T2_CC;
 	}
 
-	if (of_property_read_u32(np, "temp_t2_thres_plus_x_degree", &val) >= 0)
-		info->data.temp_t2_thres_plus_x_degree = val;
-	else if (of_property_read_u32(np, "temp-t2-thres-plus-x-degree", &val) >= 0)
-		info->data.temp_t2_thres_plus_x_degree = val;
+	if (of_property_read_u32(np, "jeita_temp_t0_to_t1_cc", &val) >= 0)
+		info->data.jeita_temp_t0_to_t1_cc = val;
 	else {
-		chr_err("use default TEMP_T2_THRES_PLUS_X_DEGREE:%d\n",
-			TEMP_T2_THRES_PLUS_X_DEGREE);
-		info->data.temp_t2_thres_plus_x_degree =
-					TEMP_T2_THRES_PLUS_X_DEGREE;
+		chr_err("use default JEITA_TEMP_T0_TO_T1_CC:%d\n",
+			JEITA_TEMP_T0_TO_T1_CC);
+		info->data.jeita_temp_t0_to_t1_cc = JEITA_TEMP_T0_TO_T1_CC;
 	}
 
-	if (of_property_read_u32(np, "temp_t1_thres", &val) >= 0)
-		info->data.temp_t1_thres = val;
-	else if (of_property_read_u32(np, "temp-t1-thres", &val) >= 0)
-		info->data.temp_t1_thres = val;
+	if (of_property_read_u32(np, "jeita_temp_below_t0_cc", &val) >= 0)
+		info->data.jeita_temp_below_t0_cc = val;
 	else {
-		chr_err("use default TEMP_T1_THRES:%d\n",
-			TEMP_T1_THRES);
-		info->data.temp_t1_thres = TEMP_T1_THRES;
+		chr_err("use default JEITA_TEMP_BELOW_T0_CC:%d\n",
+			JEITA_TEMP_BELOW_T0_CC);
+		info->data.jeita_temp_below_t0_cc = JEITA_TEMP_BELOW_T0_CC;
 	}
-
-	if (of_property_read_u32(np, "temp_t1_thres_plus_x_degree", &val) >= 0)
-		info->data.temp_t1_thres_plus_x_degree = val;
-	else if (of_property_read_u32(np, "temp-t1-thres-plus-x-degree", &val) >= 0)
-		info->data.temp_t1_thres_plus_x_degree = val;
-	else {
-		chr_err("use default TEMP_T1_THRES_PLUS_X_DEGREE:%d\n",
-			TEMP_T1_THRES_PLUS_X_DEGREE);
-		info->data.temp_t1_thres_plus_x_degree =
-					TEMP_T1_THRES_PLUS_X_DEGREE;
-	}
-
-	if (of_property_read_u32(np, "temp_t0_thres", &val) >= 0)
-		info->data.temp_t0_thres = val;
-	else if (of_property_read_u32(np, "temp-t0-thres", &val) >= 0)
-		info->data.temp_t0_thres = val;
-	else {
-		chr_err("use default TEMP_T0_THRES:%d\n",
-			TEMP_T0_THRES);
-		info->data.temp_t0_thres = TEMP_T0_THRES;
-	}
-
-	if (of_property_read_u32(np, "temp_t0_thres_plus_x_degree", &val) >= 0)
-		info->data.temp_t0_thres_plus_x_degree = val;
-	else if (of_property_read_u32(np, "temp-t0-thres-plus-x-degree", &val) >= 0)
-		info->data.temp_t0_thres_plus_x_degree = val;
-	else {
-		chr_err("use default TEMP_T0_THRES_PLUS_X_DEGREE:%d\n",
-			TEMP_T0_THRES_PLUS_X_DEGREE);
-		info->data.temp_t0_thres_plus_x_degree =
-					TEMP_T0_THRES_PLUS_X_DEGREE;
-	}
-
-	if (of_property_read_u32(np, "temp_neg_10_thres", &val) >= 0)
-		info->data.temp_neg_10_thres = val;
-	else if (of_property_read_u32(np, "temp-neg-10-thres", &val) >= 0)
-		info->data.temp_neg_10_thres = val;
-	else {
-		chr_err("use default TEMP_NEG_10_THRES:%d\n",
-			TEMP_NEG_10_THRES);
-		info->data.temp_neg_10_thres = TEMP_NEG_10_THRES;
-	}
-
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 end*/
 	/* battery temperature protection */
 	info->thermal.sm = BAT_TEMP_NORMAL;
 	info->thermal.enable_min_charge_temp =
@@ -578,7 +713,17 @@ static void mtk_charger_parse_dt(struct mtk_charger *info,
 			AC_CHARGER_INPUT_CURRENT);
 		info->data.ac_charger_input_current = AC_CHARGER_INPUT_CURRENT;
 	}
-
+/*N17 code for HQ-290909 by miaozhichao at 2023/5/25 start*/
+	if (of_property_read_u32(np, "non_std_ac_charger_current", &val) >=
+	    0)
+		info->data.non_std_ac_charger_current = val;
+	else {
+		chr_err("use default non_std_ac_charger_current:%d\n",
+			NON_STD_AC_CHARGER_CURRENT);
+		info->data.non_std_ac_charger_current =
+		    NON_STD_AC_CHARGER_CURRENT;
+	}
+/*N17 code for HQ-290909 by miaozhichao at 2023/5/25 end*/
 	if (of_property_read_u32(np, "charging_host_charger_current", &val)
 		>= 0) {
 		info->data.charging_host_charger_current = val;
@@ -625,6 +770,36 @@ static void mtk_charger_parse_dt(struct mtk_charger *info,
 		info->data.max_dmivr_charger_current =
 					MAX_DMIVR_CHARGER_CURRENT;
 	}
+
+/*N17 code for dropfv by liluting at 2023/7/3 start*/
+        ret = of_property_read_u32_array(np, "cyclecount",
+                                                info->data.cyclecount,
+                                                CYCLE_COUNT_MAX);
+        if(ret){
+                chr_err("use default CYCLE_COUNT: 0\n");
+        for(i = 0; i < CYCLE_COUNT_MAX; i++)
+                info->data.cyclecount[i] = 0;
+        }
+
+        ret = of_property_read_u32_array(np, "dropfv_ffc",
+                                                info->data.dropfv_ffc,
+                                                CYCLE_COUNT_MAX);
+        if(ret){
+                chr_err("use default DROP_FV: 0\n");
+        for(i = 0; i < CYCLE_COUNT_MAX; i++)
+                info->data.dropfv_ffc[i] = 0;
+        }
+
+        ret = of_property_read_u32_array(np, "dropfv_noffc",
+                                                info->data.dropfv_noffc,
+                                                CYCLE_COUNT_MAX);
+        if(ret){
+                chr_err("use default DROP_FV: 0\n");
+        for(i = 0; i < CYCLE_COUNT_MAX; i++)
+                info->data.dropfv_noffc[i] = 0;
+        }
+/*N17 code for dropfv by liluting at 2023/7/3 end*/
+
 	/* fast charging algo support indicator */
 	info->enable_fast_charging_indicator =
 			of_property_read_bool(np, "enable_fast_charging_indicator")
@@ -753,123 +928,7 @@ static void check_dynamic_mivr(struct mtk_charger *info)
 }
 
 /* sw jeita */
-void do_sw_jeita_state_machine(struct mtk_charger *info)
-{
-	struct sw_jeita_data *sw_jeita;
-
-	sw_jeita = &info->sw_jeita;
-	sw_jeita->pre_sm = sw_jeita->sm;
-	sw_jeita->charging = true;
-
-	/* JEITA battery temp Standard */
-	if (info->battery_temp >= info->data.temp_t4_thres) {
-		chr_err("[SW_JEITA] Battery Over high Temperature(%d) !!\n",
-			info->data.temp_t4_thres);
-
-		sw_jeita->sm = TEMP_ABOVE_T4;
-		sw_jeita->charging = false;
-	} else if (info->battery_temp > info->data.temp_t3_thres) {
-		/* control 45 degree to normal behavior */
-		if ((sw_jeita->sm == TEMP_ABOVE_T4)
-		    && (info->battery_temp
-			>= info->data.temp_t4_thres_minus_x_degree)) {
-			chr_err("[SW_JEITA] Battery Temperature between %d and %d,not allow charging yet!!\n",
-				info->data.temp_t4_thres_minus_x_degree,
-				info->data.temp_t4_thres);
-
-			sw_jeita->charging = false;
-		} else {
-			chr_err("[SW_JEITA] Battery Temperature between %d and %d !!\n",
-				info->data.temp_t3_thres,
-				info->data.temp_t4_thres);
-
-			sw_jeita->sm = TEMP_T3_TO_T4;
-		}
-	} else if (info->battery_temp >= info->data.temp_t2_thres) {
-		if (((sw_jeita->sm == TEMP_T3_TO_T4)
-		     && (info->battery_temp
-			 >= info->data.temp_t3_thres_minus_x_degree))
-		    || ((sw_jeita->sm == TEMP_T1_TO_T2)
-			&& (info->battery_temp
-			    <= info->data.temp_t2_thres_plus_x_degree))) {
-			chr_err("[SW_JEITA] Battery Temperature not recovery to normal temperature charging mode yet!!\n");
-		} else {
-			chr_err("[SW_JEITA] Battery Normal Temperature between %d and %d !!\n",
-				info->data.temp_t2_thres,
-				info->data.temp_t3_thres);
-			sw_jeita->sm = TEMP_T2_TO_T3;
-		}
-	} else if (info->battery_temp >= info->data.temp_t1_thres) {
-		if ((sw_jeita->sm == TEMP_T0_TO_T1
-		     || sw_jeita->sm == TEMP_BELOW_T0)
-		    && (info->battery_temp
-			<= info->data.temp_t1_thres_plus_x_degree)) {
-			if (sw_jeita->sm == TEMP_T0_TO_T1) {
-				chr_err("[SW_JEITA] Battery Temperature between %d and %d !!\n",
-					info->data.temp_t1_thres_plus_x_degree,
-					info->data.temp_t2_thres);
-			}
-			if (sw_jeita->sm == TEMP_BELOW_T0) {
-				chr_err("[SW_JEITA] Battery Temperature between %d and %d,not allow charging yet!!\n",
-					info->data.temp_t1_thres,
-					info->data.temp_t1_thres_plus_x_degree);
-				sw_jeita->charging = false;
-			}
-		} else {
-			chr_err("[SW_JEITA] Battery Temperature between %d and %d !!\n",
-				info->data.temp_t1_thres,
-				info->data.temp_t2_thres);
-
-			sw_jeita->sm = TEMP_T1_TO_T2;
-		}
-	} else if (info->battery_temp >= info->data.temp_t0_thres) {
-		if ((sw_jeita->sm == TEMP_BELOW_T0)
-		    && (info->battery_temp
-			<= info->data.temp_t0_thres_plus_x_degree)) {
-			chr_err("[SW_JEITA] Battery Temperature between %d and %d,not allow charging yet!!\n",
-				info->data.temp_t0_thres,
-				info->data.temp_t0_thres_plus_x_degree);
-
-			sw_jeita->charging = false;
-		} else {
-			chr_err("[SW_JEITA] Battery Temperature between %d and %d !!\n",
-				info->data.temp_t0_thres,
-				info->data.temp_t1_thres);
-
-			sw_jeita->sm = TEMP_T0_TO_T1;
-		}
-	} else {
-		chr_err("[SW_JEITA] Battery below low Temperature(%d) !!\n",
-			info->data.temp_t0_thres);
-		sw_jeita->sm = TEMP_BELOW_T0;
-		sw_jeita->charging = false;
-	}
-
-	/* set CV after temperature changed */
-	/* In normal range, we adjust CV dynamically */
-	if (sw_jeita->sm != TEMP_T2_TO_T3) {
-		if (sw_jeita->sm == TEMP_ABOVE_T4)
-			sw_jeita->cv = info->data.jeita_temp_above_t4_cv;
-		else if (sw_jeita->sm == TEMP_T3_TO_T4)
-			sw_jeita->cv = info->data.jeita_temp_t3_to_t4_cv;
-		else if (sw_jeita->sm == TEMP_T2_TO_T3)
-			sw_jeita->cv = 0;
-		else if (sw_jeita->sm == TEMP_T1_TO_T2)
-			sw_jeita->cv = info->data.jeita_temp_t1_to_t2_cv;
-		else if (sw_jeita->sm == TEMP_T0_TO_T1)
-			sw_jeita->cv = info->data.jeita_temp_t0_to_t1_cv;
-		else if (sw_jeita->sm == TEMP_BELOW_T0)
-			sw_jeita->cv = info->data.jeita_temp_below_t0_cv;
-		else
-			sw_jeita->cv = info->data.battery_cv;
-	} else {
-		sw_jeita->cv = 0;
-	}
-
-	chr_err("[SW_JEITA]preState:%d newState:%d tmp:%d cv:%d\n",
-		sw_jeita->pre_sm, sw_jeita->sm, info->battery_temp,
-		sw_jeita->cv);
-}
+/* gold: do_sw_jeita_state_machine() is gold's, in mtk_jeita.c */
 
 static int mtk_chgstat_notify(struct mtk_charger *info)
 {
@@ -1352,8 +1411,9 @@ static ssize_t ADC_Charging_Current_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
 	struct mtk_charger *pinfo = dev->driver_data;
-	int ibat = get_battery_current(pinfo); /* mA */
-
+	//N17 HQHW-4750 by p-xiepengfu at 20230804 star
+	int ibat = get_ibat(pinfo);	/* mA */
+	//N17 HQHW-4750 by p-xiepengfu at 20230804 end
 	chr_err("%s: %d\n", __func__, ibat);
 	return sprintf(buf, "%d\n", ibat);
 }
@@ -1754,6 +1814,25 @@ char *sc_solToStr(int s)
 		return "none";
 	}
 }
+
+void smart_batt_set_diff_fv(int val)
+{
+	if(pinfo == NULL)
+		return;
+	chr_err("%s diff_fv_val=%d\n", __func__, val);
+	pinfo->diff_fv_val = val;
+}
+EXPORT_SYMBOL(smart_batt_set_diff_fv);
+
+int smart_batt_get_diff_fv(void)
+{
+	if(pinfo == NULL)
+		return 0;
+	chr_err("%s diff_fv_val=%d\n", __func__, pinfo->diff_fv_val);
+	return pinfo->diff_fv_val;
+}
+EXPORT_SYMBOL(smart_batt_get_diff_fv);
+
 
 int smart_charging(struct mtk_charger *info)
 {
@@ -2521,6 +2600,31 @@ static void mtk_chg_get_tchg(struct mtk_charger *info)
 	}
 }
 
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 start*/
+static void xm_charge_work(struct work_struct *work)
+{
+	struct mtk_charger *chip = container_of(work, struct mtk_charger, xm_charge_work.work);
+
+	chr_err("N17:check xm_charge_work\n");
+	monitor_smart_chg(chip);
+
+	schedule_delayed_work(&chip->xm_charge_work, msecs_to_jiffies(1000));
+}
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 end*/
+
+/*N17 code for HQHW-4862 by yeyinzi at 2023/08/15 start*/
+static void pe_stop_enable_termination_work(struct work_struct *work)
+{
+	struct mtk_charger *chip = container_of(work, struct mtk_charger, pe_stop_enable_termination_work.work);
+
+	chr_err("pe50 stop and enable main charge termination\n");
+	charger_dev_enable_termination(chip->chg1_dev, true);
+	/*N17 code for HQ-329243 by yeyinzi at 2023/09/21 start*/
+	chip->during_switching = false;
+	/*N17 code for HQ-329243 by yeyinzi at 2023/09/21 end*/
+}
+/*N17 code for HQHW-4862 by yeyinzi at 2023/08/15 end*/
+
 static void charger_check_status(struct mtk_charger *info)
 {
 	bool charging = true;
@@ -2917,7 +3021,11 @@ static int mtk_charger_plug_out(struct mtk_charger *info)
 	}
 	memset(&info->sc.data, 0, sizeof(struct scd_cmd_param_t_1));
 	charger_dev_set_input_current(info->chg1_dev, 100000);
-	charger_dev_set_mivr(info->chg1_dev, info->data.min_charger_voltage);
+	charger_dev_set_mivr(info->chg1_dev,
+			     info->data.min_charger_voltage);
+	/*N17 code for HQHW-4862 by yeyinzi at 2023/08/15 start*/
+	cancel_delayed_work(&info->pe_stop_enable_termination_work);
+	/*N17 code for HQHW-4862 by yeyinzi at 2023/08/15 end*/
 	charger_dev_plug_out(info->chg1_dev);
 	mtk_charger_force_disable_power_path(info, CHG1_SETTING, true);
 
@@ -2928,6 +3036,19 @@ static int mtk_charger_plug_out(struct mtk_charger *info)
 	/* report plugout event */
 	mtk_charger_fw_notifier_call_chain(CHG_FW_EVT_ADAPTER_PLUGOUT, NULL);
 
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 start*/
+	cancel_delayed_work(&info->xm_charge_work);
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 end*/
+/*N17 code for low_fast by xm liluting at 2023/07/07 start*/
+        info->first_low_plugin_flag = false;
+        info->pps_fast_mode = false;
+/*N17 code for low_fast by xm liluting at 2023/07/07 end*/
+/*N17 code for cp_mode test by xm liluting at 2023/07/31 start*/
+        info->fake_thermal_vote_current = 0;
+/*N17 code for cp_mode test by xm liluting at 2023/07/31 end*/
+/*N17 code for low_fast_blank_flag by xm liluting at 2023/08/03 start*/
+        info->b_flag = NORMAL;
+/*N17 code for low_fast_blank_flag by xm liluting at 2023/08/03 end*/
 	return 0;
 }
 
@@ -2937,6 +3058,11 @@ static int mtk_charger_plug_in(struct mtk_charger *info,
 	struct chg_alg_device *alg;
 	struct chg_alg_notify notify;
 	int i, vbat;
+/*N17 code for low_fast by xm liluting at 2023/07/07 start*/
+        struct power_supply *psy = NULL;
+        union power_supply_propval cval;
+        int ret = 0;
+/*N17 code for low_fast by xm liluting at 2023/07/07 end*/
 
 	chr_debug("%s\n",
 		__func__);
@@ -2968,12 +3094,38 @@ static int mtk_charger_plug_in(struct mtk_charger *info,
 	memset(&info->sc.data, 0, sizeof(struct scd_cmd_param_t_1));
 	info->sc.disable_in_this_plug = false;
 
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 start*/
+	schedule_delayed_work(&info->xm_charge_work, msecs_to_jiffies(3000));
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 end*/
 	charger_dev_plug_in(info->chg1_dev);
 	mtk_charger_force_disable_power_path(info, CHG1_SETTING, false);
 
 	/* report plugin event */
 	mtk_charger_fw_notifier_call_chain(CHG_FW_EVT_ADAPTER_PLUGIN, NULL);
 
+/*N17 code for low_fast by xm liluting at 2023/07/07 start*/
+        psy = power_supply_get_by_name("battery");
+        if (psy != NULL) {
+                ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_CAPACITY, &cval);
+                if(!ret && (cval.intval <= 20) && (info->thermal_board_temp <= 390))
+                {
+                        info->first_low_plugin_flag = true;
+                        chr_err("%s first_low_plugin_flag = %d, pps_fast_mode = %d", __func__, info->first_low_plugin_flag, info->pps_fast_mode);
+                }
+                else {
+                        chr_err("%s failed to get capacity", __func__);
+                }
+        }
+        else {
+                chr_err("%s failed to get battery psy", __func__);
+        }
+/*N17 code for low_fast by xm liluting at 2023/07/07 end*/
+/*N17 code for cp_mode test by xm liluting at 2023/07/31 start*/
+        info->fake_thermal_vote_current = 0;
+/*N17 code for cp_mode test by xm liluting at 2023/07/31 end*/
+/*N17 code for low_fast_blank_flag by xm liluting at 2023/08/03 start*/
+        info->b_flag = NORMAL;
+/*N17 code for low_fast_blank_flag by xm liluting at 2023/08/03 end*/
 	return 0;
 }
 
@@ -2987,6 +3139,8 @@ static bool mtk_is_charger_on(struct mtk_charger *info)
 			mtk_charger_plug_out(info);
 			mutex_lock(&info->cable_out_lock);
 			info->cable_out_cnt = 0;
+			/*N17 code for HQ-314179 by hankang at 2023/08/31*/
+			info->sw_jeita.charging = true;
 			mutex_unlock(&info->cable_out_lock);
 		}
 	} else {
@@ -3039,12 +3193,21 @@ static void kpoc_power_off_check(struct mtk_charger *info)
 			chr_err("Unplug Charger/USB in KPOC mode, vbus=%d, shutdown\n", vbus);
 			while (1) {
 				if (counter >= 20000) {
-					chr_err("%s, wait too long\n", __func__);
+					chr_err("%s, wait too long\n",
+						__func__);
+/*N17 code for HQ-291689 by miaozhichao at 2023/5/26 start*/
+					msleep(4000);
+/*N17 code for HQ-291689 by miaozhichao at 2023/5/26 end*/
 					kernel_power_off();
 					break;
 				}
 				if (info->is_suspend == false) {
-					chr_err("%s, not in suspend, shutdown\n", __func__);
+					chr_err
+					    ("%s, not in suspend, shutdown\n",
+					     __func__);
+					/*N17 code for HQ-291689 by miaozhichao at 2023/5/26 start */
+					msleep(4000);
+					/*N17 code for HQ-291689 by miaozhichao at 2023/5/26 end */
 					kernel_power_off();
 					break;
 				} else {
@@ -3106,8 +3269,12 @@ static char *dump_charger_type(int chg_type, int usb_type)
 		return "usb-h";
 	case POWER_SUPPLY_TYPE_USB_DCP:
 		return "std";
-	//case POWER_SUPPLY_TYPE_USB_FLOAT:
-	//	return "nonstd";
+		//case POWER_SUPPLY_TYPE_USB_FLOAT:
+		//      return "nonstd";
+/*N17 code for HQ-293343 by miaozhichao at 2023/4/24 start*/
+	case POWER_SUPPLY_TYPE_USB_ACA:
+		return "hvdcp";
+/*N17 code for HQ-293343 by miaozhichao at 2023/4/24 end*/
 	default:
 		return "unknown";
 	}
@@ -3125,6 +3292,10 @@ static int charger_routine_thread(void *arg)
 	int vbat_max = 0;
 	int cs_vbat, cs_ibat;
 	u32 chg_cv = 0;
+	/* N17 code for HQ-292525 by tongjiacheng at 20230506 start */
+	int i = 0;
+	union power_supply_propval val;
+	/* N17 code for HQ-292525 by tongjiacheng at 20230506 end */
 
 	while (1) {
 		ret = wait_event_interruptible(info->wait_que,
@@ -3159,6 +3330,29 @@ static int charger_routine_thread(void *arg)
 		if (!info->charger_wakelock->active)
 			__pm_stay_awake(info->charger_wakelock);
 		spin_unlock_irqrestore(&info->slock, flags);
+
+		/*N17 code for HQHW-4728 by yeyinzi at 2023/08/07 start*/
+		info->battery_temp = get_battery_temperature(info);
+
+		/*N17 code for HQHW-4654 by tongjiacheng at 2023/08/04 start*/
+		if (get_uisoc(info) >= 100 &&
+				info->polling_interval > CHARGING_100_PERCENT_INTERVAL) {
+			info->polling_interval = CHARGING_100_PERCENT_INTERVAL;
+			chr_err("uisoc reach 100, change charging interval(%d)\n",
+				info->polling_interval);
+		} else if (info->battery_temp > 46 &&
+					info->polling_interval > CHARGING_ABNORMAL_TEMP_INTERVAL) {
+			info->polling_interval = CHARGING_ABNORMAL_TEMP_INTERVAL;
+			chr_err("battery temp > 46, change charging interval(%d)\n",
+				info->polling_interval);
+		} else if (get_uisoc(info) < 100 && info->battery_temp <= 46){
+			info->polling_interval = CHARGING_INTERVAL;
+			chr_err("nomal, switch to change charging interval(%d)\n",
+				info->polling_interval);
+		}
+		/*N17 code for HQHW-4654 by tongjiacheng at 2023/08/04 end*/
+		/*N17 code for HQHW-4728 by yeyinzi at 2023/08/07 end*/
+
 		info->charger_thread_timeout = false;
 
 		info->battery_temp = get_battery_temperature(info);
@@ -3218,6 +3412,35 @@ static int charger_routine_thread(void *arg)
 				info->algo.do_algorithm(info);
 			charger_status_check(info);
 		} else {
+			/* N17 code for HQ-292513 by tongjiacheng at 20230510 start */
+			if (is_disable_charger(info) == true) {
+				/* N17 code for HQ-292525 by tongjiacheng at 20230506 start */
+				charger_dev_enable_powerpath(info->
+							     chg1_dev,
+							     false);
+
+				for (i = 0; i < MAX_ALG_NO; i++) {
+					if (info->alg[i] == NULL)
+						continue;
+					chg_alg_stop_algo(info->alg[i]);
+				}
+
+				val.intval = true;
+				ret =
+				    power_supply_set_property(info->
+							      chg_psy,
+							      POWER_SUPPLY_PROP_STATUS,
+							      &val);
+				if (ret) {
+					chr_err
+					    ("set charger enable fail(%d)\n",
+					     ret);
+					return ret;
+				}
+				power_supply_changed(info->psy1);
+			}
+			/* N17 code for HQ-292525 by tongjiacheng at 20230506 end */
+			/* N17 code for HQ-292513 by tongjiacheng at 20230510 end */
 			chr_debug("disable charging %d %d %d\n",
 			    is_disable_charger(info), is_charger_on, info->can_charging);
 		}
@@ -3520,6 +3743,9 @@ static const enum power_supply_property charger_psy_properties[] = {
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_VOLTAGE_MAX,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
+/*N17 code for HQ-291625 by miaozhichao at 2023/05/05 start*/
+	POWER_SUPPLY_PROP_CHARGE_NOW,
+/*N17 code for HQ-291625 by miaozhichao at 2023/05/05 end*/
 	POWER_SUPPLY_PROP_TEMP,
 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX,
 	POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
@@ -3532,10 +3758,14 @@ static int psy_charger_get_property(struct power_supply *psy,
 {
 	struct mtk_charger *info;
 	struct charger_device *chg;
-	int ret = 0, chg_vbat = 0, vbat_max = 0, idx = 0;
+	int ret = 0, idx = 0;
+/*N17 code for HQ-291625 by miaozhichao at 2023/05/05 start*/
+	int cp_div;
 	struct chg_alg_device *alg = NULL;
-
-	info = (struct mtk_charger *)power_supply_get_drvdata(psy);
+	struct power_supply *cp_psy = NULL;
+	union power_supply_propval val_new;
+/*N17 code for HQ-291625 by miaozhichao at 2023/05/05 end*/
+	info = (struct mtk_charger *) power_supply_get_drvdata(psy);
 	if (info == NULL) {
 		chr_err("%s: get info failed\n", __func__);
 		return -EINVAL;
@@ -3596,6 +3826,26 @@ static int psy_charger_get_property(struct power_supply *psy,
 		val->intval = get_vbus(info);
 		break;
 
+/*N17 code for HQ-291625 by miaozhichao at 2023/05/05 start*/
+	case POWER_SUPPLY_PROP_CHARGE_NOW:
+		/* ln8000 reports uA, sc8551 mA */
+		cp_div = 1000;
+		cp_psy = power_supply_get_by_name("ln8000-charger");
+		if (IS_ERR_OR_NULL(cp_psy)) {
+			cp_div = 1;
+			cp_psy = power_supply_get_by_name("sc-cp-standalone");
+		}
+		if (IS_ERR_OR_NULL(cp_psy)) {
+			chr_err("%s cp psy fail\n", __func__);
+			return 0;
+		}
+		ret = power_supply_get_property(cp_psy,
+			POWER_SUPPLY_PROP_CURRENT_NOW, &val_new);
+		power_supply_put(cp_psy);
+		val->intval = get_ibus(info) +
+			(ret < 0 ? 0 : val_new.intval / cp_div);
+		break;
+/*N17 code for HQ-291625 by miaozhichao at 2023/05/05 end*/
 	case POWER_SUPPLY_PROP_TEMP:
 		val->intval = info->chg_data[idx].junction_temp_max * 10;
 		break;
@@ -3612,11 +3862,6 @@ static int psy_charger_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_USB_TYPE:
 		chr_debug("not yet\n");
-		break;
-	case POWER_SUPPLY_PROP_CHARGE_NOW:
-		ret = charger_dev_get_adc(info->chg1_dev,
-			ADC_CHANNEL_VBAT, &chg_vbat, &vbat_max);
-		val->intval = chg_vbat;
 		break;
 	default:
 		return -EINVAL;
@@ -3718,7 +3963,6 @@ static int psy_charger_set_property(struct power_supply *psy,
 {
 	struct mtk_charger *info;
 	int idx;
-
 	chr_err("%s: prop:%d %d\n", __func__, psp, val->intval);
 
 	info = (struct mtk_charger *)power_supply_get_drvdata(psy);
@@ -3780,6 +4024,10 @@ static int psy_charger_set_property(struct power_supply *psy,
 		else
 			mtk_charger_force_disable_power_path(info, idx, false);
 		break;
+/*N17 code for HQHW-4469 by miaozhichao at 2023/7/04 start*/
+	case POWER_SUPPLY_PROP_ENERGY_FULL:
+		break;
+/*N17 code for HQHW-4469 by miaozhichao at 2023/7/04 end*/
 	default:
 		return -EINVAL;
 	}
@@ -3796,6 +4044,10 @@ static void mtk_charger_external_power_changed(struct power_supply *psy)
 	union power_supply_propval vbat0 = {0};
 	struct power_supply *chg_psy = NULL;
 	int ret = 0;
+/* N17 code for HQ-291012 by tongjiacheng at 20230601 start */
+	char chr_type_str[64];
+	char *envp[] = { chr_type_str, NULL };
+/* N17 code for HQ-291012 by tongjiacheng at 20230601 end */
 
 	info = (struct mtk_charger *)power_supply_get_drvdata(psy);
 	if (info == NULL) {
@@ -3835,9 +4087,20 @@ static void mtk_charger_external_power_changed(struct power_supply *psy)
 		info->vbat0_flag = vbat0.intval;
 	}
 
-	pr_notice("%s event, name:%s online:%d type:%d vbus:%d\n", __func__,
-		psy->desc->name, prop.intval, prop2.intval,
-		get_vbus(info));
+	pr_notice("%s event, name:%s online:%d type:%d vbus:%d\n",
+		  __func__, psy->desc->name, prop.intval, prop2.intval,
+		  get_vbus(info));
+
+	/* N17 code for HQ-291012 by tongjiacheng at 20230601 start */
+	if (prop2.intval == POWER_SUPPLY_USB_TYPE_ACA) {
+		sprintf(envp[0], "POWER_SUPPLY_QUICK_CHARGE_TYPE=1");
+
+		ret = kobject_uevent_env(&(info->psy1->dev.kobj),
+			   KOBJ_CHANGE, envp);
+		if (ret)
+			pr_err("%s send uevent fail(%d)\n", __func__, ret);
+	}
+	/* N17 code for HQ-291012 by tongjiacheng at 20230601 end */
 
 	_wake_up_charger(info);
 }
@@ -3941,6 +4204,11 @@ int notify_adapter_event(struct notifier_block *notifier,
 			_wake_up_charger(pinfo);
 		}
 		break;
+	case MTK_PD_CVDM:
+		mutex_lock(&pinfo->ta_lock);
+		usbpd_mi_vdm_received_cb(pinfo, *(struct tcp_ny_cvdm *)val);
+		mutex_unlock(&pinfo->ta_lock);
+		break;
 	}
 	chr_debug("%s: evt: pd:%d, ufcs:%d\n", __func__,
 	pinfo->ta_status[PD], pinfo->ta_status[UFCS]);
@@ -3950,13 +4218,132 @@ int notify_adapter_event(struct notifier_block *notifier,
 	return NOTIFY_DONE;
 }
 
+/*N17 code for HQ-291625 by miaozhichao at 2023/04/28 start*/
+/* From Xiaomi's 6.6 tree (MiCode bsp-rodin-v-oss): its PD adapters' answers */
+static void usbpd_mi_vdm_received_cb(struct mtk_charger *pinfo, struct tcp_ny_cvdm cvdm)
+{
+	int i, cmd;
+
+	if (!pinfo->pd_adapter)
+		return;
+
+	cmd = UVDM_HDR_CMD(cvdm.data[0]);
+	chr_err("cmd = %d\n", cmd);
+	chr_err("cvdm.ack: %d, cvdm.cnt: %d\n", cvdm.ack, cvdm.cnt);
+
+	switch (cmd) {
+	case USBPD_UVDM_CHARGER_VERSION:
+		pinfo->pd_adapter->vdm_data.ta_version = cvdm.data[1];
+		chr_err("ta_version:%x\n", pinfo->pd_adapter->vdm_data.ta_version);
+		break;
+	case USBPD_UVDM_CHARGER_TEMP:
+		pinfo->pd_adapter->vdm_data.ta_temp = (cvdm.data[1] & 0xFFFF) * 10;
+		chr_err("pinfo->pd_adapter->vdm_data.ta_temp:%d\n", pinfo->pd_adapter->vdm_data.ta_temp);
+		break;
+	case USBPD_UVDM_CHARGER_VOLTAGE:
+		pinfo->pd_adapter->vdm_data.ta_voltage = (cvdm.data[1] & 0xFFFF) * 10;
+		pinfo->pd_adapter->vdm_data.ta_voltage *= 1000;
+		chr_err("ta_voltage:%d\n", pinfo->pd_adapter->vdm_data.ta_voltage);
+		break;
+	case USBPD_UVDM_SESSION_SEED:
+		for (i = 0; i < USBPD_UVDM_SS_LEN; i++) {
+			pinfo->pd_adapter->vdm_data.s_secert[i] = cvdm.data[i+1];
+			chr_err("usbpd s_secert cvdm.data[%d]=0x%x", i+1, cvdm.data[i+1]);
+		}
+		break;
+	case USBPD_UVDM_AUTHENTICATION:
+		for (i = 0; i < USBPD_UVDM_SS_LEN; i++) {
+			pinfo->pd_adapter->vdm_data.digest[i] = cvdm.data[i+1];
+			chr_err("usbpd digest[%d]=0x%x", i+1, cvdm.data[i+1]);
+		}
+		break;
+	case USBPD_UVDM_REVERSE_AUTHEN:
+		pinfo->pd_adapter->vdm_data.reauth = (cvdm.data[1] & 0xFFFF);
+		break;
+	default:
+		break;
+	}
+	pinfo->pd_adapter->uvdm_state = cmd;
+}
+
+/*N17 code for HQ-291625 by miaozhichao at 2023/04/28 end*/
 int chg_alg_event(struct notifier_block *notifier,
 			unsigned long event, void *data)
 {
+/*N17 code for HQ-305659 by tongjiacheng at 2023/07/07 start*/
+	struct mtk_charger *info = container_of(notifier,
+		struct mtk_charger, chg_alg_nb);
+	struct chg_alg_notify *noti = (struct chg_alg_notify *)data;
 	chr_err("%s: evt:%lu\n", __func__, event);
+
+	/*N17 code for HQHW-4862 by yeyinzi at 2023/08/15 start*/
+	if (noti->evt == EVT_ALGO_STOP){
+		_wake_up_charger(info);
+		schedule_delayed_work(&info->pe_stop_enable_termination_work, msecs_to_jiffies(2000));
+	}
+	/*N17 code for HQHW-4862 by yeyinzi at 2023/08/15 end*/
+/*N17 code for HQ-305659 by tongjiacheng at 2023/07/07 end*/
+	return NOTIFY_DONE;
+}
+
+
+/*N17 code for screen_state by xm liluting at 2023/07/11 start*/
+static int screen_state_for_charger_callback(struct notifier_block *nb,
+                                            unsigned long val, void *v)
+{
+        int blank = *(int *)v;
+        struct power_supply *psy = NULL;
+	struct mtk_charger *info = NULL;
+
+	if (info == NULL) {
+		psy = power_supply_get_by_name("mtk-master-charger");
+		if (psy == NULL)
+			return -PTR_ERR(psy);
+		else
+			info = (struct mtk_charger *)power_supply_get_drvdata(psy);
+	}
+
+        if (!(val == MTK_DISP_EARLY_EVENT_BLANK|| val == MTK_DISP_EVENT_BLANK)) {
+                chr_err("%s event(%lu) do not need process\n", __func__, val);
+                return NOTIFY_OK;
+        }
+
+        switch (blank) {
+        case MTK_DISP_BLANK_UNBLANK: //power on
+                info->sm.screen_state = 0;
+                chr_err("%s screen_state = %d\n", __func__, info->sm.screen_state);
+                break;
+        case MTK_DISP_BLANK_POWERDOWN: //power off
+                info->sm.screen_state = 1;
+                chr_err("%s screen_state = %d\n", __func__, info->sm.screen_state);
+                break;
+        }
+        return NOTIFY_OK;
+}
+/*N17 code for screen_state by xm liluting at 2023/07/11 end*/
+
+/*N17 code for thermal_board_temp by xm liluting at 2023/07/18 start*/
+static int charger_notifier_event(struct notifier_block *notifier,
+			unsigned long chg_event, void *val)
+{
+	struct mtk_charger *info;
+
+	info = container_of(notifier,
+		struct mtk_charger, chg_nb);
+
+	switch (chg_event) {
+	case THERMAL_BOARD_TEMP:
+		info->thermal_board_temp = *(int *)val;
+		chr_err("%s: get thermal_board_temp: %d\n", __func__, info->thermal_board_temp);
+		break;
+	default:
+		chr_err("%s: not supported charger notifier event: %lu\n", __func__, chg_event);
+		break;
+	}
 
 	return NOTIFY_DONE;
 }
+/*N17 code for thermal_board_temp by xm liluting at 2023/07/18 end*/
 
 static char *mtk_charger_supplied_to[] = {
 	"battery"
@@ -3965,7 +4352,7 @@ static char *mtk_charger_supplied_to[] = {
 static int mtk_charger_probe(struct platform_device *pdev)
 {
 	struct mtk_charger *info = NULL;
-	int i;
+	int i, ret;
 	char *name = NULL;
 
 	chr_err("%s: starts\n", __func__);
@@ -4045,8 +4432,7 @@ static int mtk_charger_probe(struct platform_device *pdev)
 		chr_err("%s: devm power fail to get bc12_psy\n", __func__);
 #endif
 
-	info->bat_psy = devm_power_supply_get_by_phandle(&pdev->dev,
-		"gauge");
+	info->bat_psy = power_supply_get_by_name("battery");
 	if (IS_ERR_OR_NULL(info->bat_psy))
 		chr_err("%s: devm power fail to get bat_psy\n", __func__);
 
@@ -4156,6 +4542,9 @@ static int mtk_charger_probe(struct platform_device *pdev)
 			get_adapter_by_name(adapter_type_names[i]);
 		if (!info->adapter_dev[i])
 			chr_err("%s: No %s found\n", __func__, adapter_type_names[i]);
+		else if (i == PD)
+			/* gold: Xiaomi's PD adapter verification works on it */
+			info->pd_adapter = info->adapter_dev[i];
 		else {
 			info->ta_nb[i].nb.notifier_call = notify_adapter_event;
 			info->ta_nb[i].info = info;
@@ -4181,20 +4570,50 @@ static int mtk_charger_probe(struct platform_device *pdev)
 	info->en_power_path = true;
 	info->safety_timer_cmd = -1;
 	info->cmd_pp = -1;
+	info->diff_fv_val = 0;
+	/*N17 code for HQ-319688 by p-xiepengfu at 20230907 start*/
+	info->deltaFv = 0;
+	/*N17 code for HQ-319688 by p-xiepengfu at 20230907 end*/
+        info->is_full_flag = false;
+/*N17 code for low_fast by xm liluting at 2023/07/07 start*/
+        info->first_low_plugin_flag = false;
+        info->pps_fast_mode = false;
+/*N17 code for low_fast by xm liluting at 2023/07/07 end*/
+/*N17 code for cp_mode test by xm liluting at 2023/07/31 start*/
+        info->fake_thermal_vote_current = 0;
+/*N17 code for cp_mode test by xm liluting at 2023/07/31 end*/
+/*N17 code for HQ-329243 by yeyinzi at 2023/09/21 start*/
+	info->during_switching = false;
+/*N17 code for HQ-329243 by yeyinzi at 2023/09/21 end*/
 
 	/* 8 = KERNEL_POWER_OFF_CHARGING_BOOT */
 	/* 9 = LOW_POWER_OFF_CHARGING_BOOT */
 	if (info != NULL && info->bootmode != 8 && info->bootmode != 9)
 		mtk_charger_force_disable_power_path(info, CHG1_SETTING, true);
 
-	info->charger_notifier.notifier_call = screen_state_for_charger_callback;
-	ret = mi_disp_register_client(&info->charger_notifier);
-	if (ret < 0) {
-		chr_err("%s register screen state callback failed\n",__func__);
-	}
+	/*N17 code for HQHW-4862 by yeyinzi at 2023/08/15 start*/
+	INIT_DELAYED_WORK(&info->pe_stop_enable_termination_work, pe_stop_enable_termination_work);
+	/*N17 code for HQHW-4862 by yeyinzi at 2023/08/15 end*/
 
-	info->chg_nb.notifier_call = charger_notifier_event;
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 start*/
+	INIT_DELAYED_WORK(&info->xm_charge_work, xm_charge_work);
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 end*/
+/*N17 code for screen_state by xm liluting at 2023/07/11 start*/
+        info->sm.charger_panel_notifier.notifier_call = screen_state_for_charger_callback;
+        ret = mtk_disp_notifier_register("screen state", &info->sm.charger_panel_notifier);
+        if (ret) {
+               chr_err("[%s]: register screen state callback failed\n", __func__);
+        }
+/*N17 code for screen_state by xm liluting at 2023/07/11 end*/
+
+/*N17 code for thermal_board_temp by xm liluting at 2023/07/18 start*/
+        info->chg_nb.notifier_call = charger_notifier_event;
 	charger_reg_notifier(&info->chg_nb);
+/*N17 code for thermal_board_temp by xm liluting at 2023/07/18 end*/
+/*N17 code for low_fast_blank_flag by xm liluting at 2023/08/03 start*/
+        info->b_flag = NORMAL;
+/*N17 code for low_fast_blank_flag by xm liluting at 2023/08/03 end*/
+        info->thermal_board_temp = 250;
 
 	kthread_run(charger_routine_thread, info, "charger_thread");
 
@@ -4203,6 +4622,16 @@ static int mtk_charger_probe(struct platform_device *pdev)
 
 static int mtk_charger_remove(struct platform_device *dev)
 {
+/*N17 code for screen_state by xm liluting at 2023/07/11 start*/
+        struct mtk_charger *info = platform_get_drvdata(dev);
+
+        mtk_disp_notifier_unregister(&info->sm.charger_panel_notifier);
+/*N17 code for screen_state by xm liluting at 2023/07/11 end*/
+
+/*N17 code for thermal_board_temp by xm liluting at 2023/07/18 start*/
+	charger_unreg_notifier(&info->chg_nb);
+/*N17 code for thermal_board_temp by xm liluting at 2023/07/18 end*/
+
 	return 0;
 }
 
