@@ -684,7 +684,21 @@ static int mtk_usb_extcon_probe(struct platform_device *pdev)
 #if IS_ENABLED(CONFIG_TCPC_CLASS) || IS_ENABLED(CONFIG_SOUTHCHIP_TCPC_CLASS)
 	const char *tcpc_name;
 #endif
+	struct power_supply *usb_psy;
 	int ret;
+
+	/*
+	 * The usb power supply comes up after this driver on gold (Huaqin's
+	 * charger nodes register it). Wait for it before anything is set up:
+	 * a later deferral would leave the nodes, the workqueue and the role
+	 * switch of this try behind.
+	 */
+	if (of_property_read_bool(dev->of_node, "charger")) {
+		usb_psy = power_supply_get_by_name("usb");
+		if (!usb_psy)
+			return -EPROBE_DEFER;
+		power_supply_put(usb_psy);
+	}
 
 	extcon = devm_kzalloc(&pdev->dev, sizeof(*extcon), GFP_KERNEL);
 	if (!extcon)
