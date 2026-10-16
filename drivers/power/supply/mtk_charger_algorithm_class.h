@@ -150,7 +150,12 @@ struct chg_alg_ops {
 		enum chg_alg_props s, int value);
 	int (*set_current_limit)(struct chg_alg_device *alg_dev,
 		struct chg_limit_setting *setting);
-
+/*N17 code for HQ-308229 by xm tianye9 at 2023/07/20 start*/
+	int (*cp_statemachine_restart)(struct chg_alg_device *alg,
+		bool run_once);
+/*N17 code for HQ-308229 by xm tianye9 at 2023/07/20 end*/
+	/* N17 code for HQ-311096 by p-gucheng at 2023/08/09 */
+	int (*cp_charge_finished)(struct chg_alg_device *alg_dev);
 };
 
 #define to_chg_alg_dev(obj) container_of(obj, struct chg_alg_device, dev)
@@ -209,4 +214,10 @@ extern int chg_alg_notifier_call(struct chg_alg_device *alg_dev,
 extern char *chg_alg_state_to_str(int state);
 extern const char *const
 chg_alg_notify_evt_tostring(enum chg_alg_notifier_events evt);
+/*N17 code for HQ-308229 by xm tianye9 at 2023/07/20 start*/
+extern int chg_alg_cp_statemachine_restart(struct chg_alg_device *alg_dev,
+	bool run_once);
+/*N17 code for HQ-308229 by xm tianye9 at 2023/07/20 end*/
+/* N17 code for HQ-311096 by p-gucheng at 2023/08/09 */
+extern int chg_alg_cp_charge_finished(struct chg_alg_device *alg_dev);
 #endif /* __MTK_CHARGER_ALGORITHM_CLASS_H__ */
