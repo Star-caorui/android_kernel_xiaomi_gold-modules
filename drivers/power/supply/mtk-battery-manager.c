@@ -27,6 +27,7 @@
 
 #include "mtk_battery.h"
 #include "mtk_gauge.h"
+#include "mtk_charger.h"
 #if IS_ENABLED(CONFIG_MTK_AEE_FEATURE)
 #include <mt-plat/aee.h>
 #endif
@@ -1017,7 +1018,51 @@ static enum power_supply_property battery_props[] = {
 	POWER_SUPPLY_PROP_TIME_TO_FULL_NOW,
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE,
+/* N17 code for HQ-292280 by tongjiacheng at 20230610 start */
+	POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT,
+	POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX,
+/* N17 code for HQ-292280 by tongjiacheng at 20230610 end */
+/*N17 code for HQ-299665 by miaozhichao at 2023/6/14 start*/
+	POWER_SUPPLY_PROP_ENERGY_FULL,
+/*N17 code for HQ-299665 by miaozhichao at 2023/6/14 end*/
+/*N17 code for cp_mode test by xm liluting at 2023/07/31 start*/
+	POWER_SUPPLY_PROP_SCOPE,
+/*N17 code for cp_mode test by xm liluting at 2023/07/31 end*/
 };
+
+/* N17 code for HQ-292280 by tongjiacheng at 20230610 start */
+static int battery_psy_is_writeable(struct power_supply *psy,
+				    enum power_supply_property psp)
+{
+	switch (psp) {
+	case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT:
+	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX:
+	case POWER_SUPPLY_PROP_CYCLE_COUNT:
+	case POWER_SUPPLY_PROP_SCOPE:
+		return 1;
+	default:
+		return 0;
+	}
+}
+/* N17 code for HQ-292280 by tongjiacheng at 20230610 end */
+
+/* gold: the charger framework, for its state and thermal votes */
+static struct mtk_charger *bm_get_charger(void)
+{
+	struct power_supply *chg_psy;
+	struct mtk_charger *info;
+
+	chg_psy = power_supply_get_by_name("mtk-master-charger");
+	if (chg_psy == NULL) {
+		pr_err("[%s]psy is not rdy\n", __func__);
+		return NULL;
+	}
+	info = (struct mtk_charger *)power_supply_get_drvdata(chg_psy);
+	power_supply_put(chg_psy);
+	if (info == NULL)
+		pr_err("[%s] charge is not rdy\n", __func__);
+	return info;
+}
 
 static int bm_update_psy_property(struct mtk_battery *gm, enum bm_psy_prop prop)
 {
@@ -1094,21 +1139,42 @@ static int bs_psy_get_property(struct power_supply *psy,
 	int curr_avg = 0;
 	int remain_ui = 0, remain_mah = 0;
 	int time_to_full = 0;
-	int q_max_uah = 0;
 	int volt_now = 0;
 	int count = 0;
 	int temp = 0;
 	struct mtk_battery_manager *bm;
 	struct battery_data *bs_data;
+	struct mtk_charger *info;
+	struct mtk_battery *gm;
+	int tbat;
 
 	bm = (struct mtk_battery_manager *)power_supply_get_drvdata(psy);
 	bs_data = &bm->bs_data;
+	gm = bm->gm1;
 
 	/* gauge_get_property should check return value */
 	/* to avoid i2c suspend but query by other module */
 	switch (psp) {
 	case POWER_SUPPLY_PROP_STATUS:
 		val->intval = bs_data->bat_status;
+		info = bm_get_charger();
+		if (info == NULL)
+			break;
+		/*N17 code for HQ-314179 by hankang at 2023/08/31 start*/
+		tbat = force_get_tbat(gm, true);
+		if (!(info->sw_jeita.charging) && tbat > 46 && info->disable_charger == false
+			&& val->intval == POWER_SUPPLY_STATUS_NOT_CHARGING) {
+			val->intval = POWER_SUPPLY_STATUS_CHARGING;
+			/*N17 code for HQ-328970 by hankang at 2023/09/15*/
+			bs_data->bat_status = POWER_SUPPLY_STATUS_CHARGING;
+		}
+		/*N17 code for HQ-314179 by hankang at 2023/08/31 end*/
+		/*N17 code for HQ-329243 by yeyinzi at 2023/09/21 start*/
+		if (val->intval == POWER_SUPPLY_STATUS_NOT_CHARGING && info->during_switching) {
+			val->intval = POWER_SUPPLY_STATUS_CHARGING;
+			bs_data->bat_status = POWER_SUPPLY_STATUS_CHARGING;
+		}
+		/*N17 code for HQ-329243 by yeyinzi at 2023/09/21 end*/
 		break;
 	case POWER_SUPPLY_PROP_HEALTH:
 		val->intval = bs_data->bat_health;
@@ -1146,8 +1212,15 @@ static int bs_psy_get_property(struct power_supply *psy,
 
 		if (bm->gm1->fixed_uisoc != 0xffff)
 			val->intval = bm->gm1->fixed_uisoc;
-		else
-			val->intval = bs_data->bat_capacity;
+		/* N17 code for HQ-290778 by tongjiacheng at 20230530 start */
+		else {
+			/*N17 code for HQHW-5058 by yeyinzi at 2023/8/28 start*/
+			val->intval = bs_data->final_capacity;
+			/*N17 code for HQHW-5058 by yeyinzi at 2023/8/28 end*/
+			if (val->intval <= 1)
+				val->intval = 1;
+		}
+		/* N17 code for HQ-290778 by tongjiacheng at 20230530 end */
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
 
@@ -1174,27 +1247,15 @@ static int bs_psy_get_property(struct power_supply *psy,
 		ret = 0;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
-
-		if (bm->gm1 != NULL)
-			if(!bm->gm1->bat_plug_out)
-				qmax += bm_update_psy_property(bm->gm1, QMAX_DESIGN);
-		if (bm->gm2 != NULL)
-			if(!bm->gm2->bat_plug_out)
-				qmax += bm_update_psy_property(bm->gm2, QMAX_DESIGN);
-
-		val->intval = qmax * 100;
-		ret = 0;
+		/*N17 code for HQ-326374 by p-xiepengfu at 2023/09/19 start*/
+		val->intval = gm->algo_qmax * 100;
+		/*N17 code for HQ-326374 by p-xiepengfu at 2023/09/19 end*/
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
-
-		if (bm->gm1 != NULL)
-			if(!bm->gm1->bat_plug_out)
-				qmax += bm_update_psy_property(bm->gm1, QMAX_DESIGN);
-		if (bm->gm2 != NULL)
-			if(!bm->gm2->bat_plug_out)
-				qmax += bm_update_psy_property(bm->gm2, QMAX_DESIGN);
-
-		val->intval = bs_data->bat_capacity * qmax;
+		/*N17 code for HQ-291722 by wangtingting at 2023/5/5 start*/
+		val->intval = gm->ui_soc *
+			gm->algo_qmax / 100 * gm->aging_factor / 100;
+		/*N17 code for HQ-291722 by wangtingting at 2023/5/5 end*/
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 
@@ -1262,27 +1323,9 @@ static int bs_psy_get_property(struct power_supply *psy,
 		ret = 0;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-		if (check_cap_level(bs_data->bat_capacity) ==
-			POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN) {
-			val->intval = 0;
-			break;
-		}
-
-		if (bm->gm1 != NULL)
-			if(!bm->gm1->bat_plug_out)
-				qmax += bm_update_psy_property(bm->gm1, QMAX_DESIGN);
-		if (bm->gm2 != NULL)
-			if(!bm->gm2->bat_plug_out)
-				qmax += bm_update_psy_property(bm->gm2, QMAX_DESIGN);
-
-		q_max_uah = qmax * 100;
-		if (q_max_uah <= 100000) {
-			pr_debug("%s gm_no:%d, q_max:%d q_max_uah:%d\n",
-				__func__, bm->gm_no, qmax, q_max_uah);
-			q_max_uah = 100001;
-		}
-		val->intval = q_max_uah;
-
+		/*N17 code for HQ-290757 by wangtingting at 2023/05/22 start*/
+		val->intval = 5000000;
+		/*N17 code for HQ-290757 by wangtingting at 2023/05/22 end*/
 		break;
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
 		if (IS_ERR_OR_NULL(bs_data->chg_psy)) {
@@ -1302,8 +1345,31 @@ static int bs_psy_get_property(struct power_supply *psy,
 			}
 		}
 		break;
-
-
+/* N17 code for HQ-292280 by tongjiacheng at 20230610 start */
+	case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT:
+		val->intval = charger_manager_get_thermal_level();
+		ret = 0;
+		break;
+	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX:
+		val->intval = gm->const_current;
+		ret = 0;
+		break;
+/* N17 code for HQ-292280 by tongjiacheng at 20230610 end*/
+/*N17 code for HQ-299665 by miaozhichao at 2023/6/14 start*/
+	case POWER_SUPPLY_PROP_ENERGY_FULL:
+		val->intval = bs_data->bat_full;
+		ret = 0;
+		break;
+/*N17 code for HQ-299665 by miaozhichao at 2023/6/14 end*/
+/*N17 code for cp_mode test by xm liluting at 2023/07/31 start*/
+	case POWER_SUPPLY_PROP_SCOPE:
+		info = bm_get_charger();
+		if (info == NULL)
+			return ret;
+		val->intval = info->fake_thermal_vote_current;
+		ret = 0;
+		break;
+/*N17 code for cp_mode test by xm liluting at 2023/07/31 end*/
 	default:
 		ret = -EINVAL;
 		break;
@@ -1320,13 +1386,50 @@ static int bs_psy_set_property(struct power_supply *psy,
 {
 	int ret = 0;
 	struct mtk_battery_manager *bm;
+	struct mtk_battery *gm;
+	struct mtk_charger *info;
 
 	bm = (struct mtk_battery_manager *)power_supply_get_drvdata(psy);
+	gm = bm->gm1;
 	switch (psp) {
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
 		if (val->intval > 0)
 			bm_send_cmd(bm, MANAGER_DYNAMIC_CV, val->intval);
 		break;
+/* N17 code for HQ-292280 by tongjiacheng at 20230610 start */
+	case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT:
+		/* mi_thermald's charging level, unless a constant current is set */
+		if (!gm->const_current)
+			charger_manager_set_thermal_level(val->intval);
+		gm->thermal_level = val->intval;
+		break;
+	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX:
+		gm->const_current = val->intval;
+		if (val->intval != 0)
+			charger_manager_set_thermal_level(14);
+		else
+			charger_manager_set_thermal_level(gm->thermal_level);
+		break;
+/* N17 code for HQ-292280 by tongjiacheng at 20230610 end */
+/* N17 code for fake_cycle_count by liluting at 20230726 start */
+	case POWER_SUPPLY_PROP_CYCLE_COUNT:
+		gm->fake_bat_cycle = val->intval;
+		gm->bat_cycle = val->intval;
+		break;
+/* N17 code for fake_cycle_count by liluting at 20230726 end */
+/*N17 code for cp_mode test by xm liluting at 2023/07/31 start*/
+	case POWER_SUPPLY_PROP_SCOPE:
+		info = bm_get_charger();
+		if (info == NULL)
+			return ret;
+		if (val->intval > 0 && val->intval <= 6000000) {
+			info->fake_thermal_vote_current = val->intval;
+		} else {
+			info->fake_thermal_vote_current = 0;
+			pr_err("[%s] value invalid: (0, 6000000]!\n", __func__);
+		}
+		break;
+/*N17 code for cp_mode test by xm liluting at 2023/07/31 end*/
 	default:
 		ret = -EINVAL;
 		break;
@@ -1388,10 +1491,20 @@ static void mtk_battery_external_power_changed(struct power_supply *psy)
 
 		if (!online.intval) {
 			bs_data->bat_status = POWER_SUPPLY_STATUS_DISCHARGING;
+/*N17 code for HQ-299665 by miaozhichao at 2023/6/12 start*/
+			bs_data->bat_full = false;
+/*N17 code for HQ-299665 by miaozhichao at 2023/6/12 end*/
 		} else {
 			if (status.intval == POWER_SUPPLY_STATUS_NOT_CHARGING) {
-				bs_data->bat_status =
-					POWER_SUPPLY_STATUS_NOT_CHARGING;
+/*N17 code for HQ-308317 by xm tianye9 at 2023/07/20 start*/
+				if (!bs_data->bat_full) {
+					if (bm->gm1->smart_charge[SMART_CHG_NAVIGATION].active_status) {
+						bs_data->bat_status = POWER_SUPPLY_STATUS_CHARGING;
+						pr_err("%s,N17:smart chg navigation trigger\n", __func__);
+					} else
+						bs_data->bat_status = POWER_SUPPLY_STATUS_NOT_CHARGING;
+				}
+/*N17 code for HQ-308317 by xm tianye9 at 2023/07/20 end*/
 
 				dv2_chg_psy = power_supply_get_by_name("mtk-mst-div-chg");
 				if (!IS_ERR_OR_NULL(dv2_chg_psy)) {
@@ -1432,8 +1545,10 @@ static void mtk_battery_external_power_changed(struct power_supply *psy)
 		cur_chr_type = prop_type.intval;
 
 		if (cur_chr_type == POWER_SUPPLY_TYPE_UNKNOWN) {
-			if (bm->chr_type != POWER_SUPPLY_TYPE_UNKNOWN)
+			if (bm->chr_type != POWER_SUPPLY_TYPE_UNKNOWN) {
 				pr_err("%s chr plug out\n", __func__);
+				bm->gm1->s_flag = LOW_FAST_NORMAL;
+			}
 		} else {
 			if (bm->chr_type == POWER_SUPPLY_TYPE_UNKNOWN)
 				bm_send_cmd(bm, MANAGER_WAKE_UP_ALGO, FG_INTR_CHARGER_IN);
@@ -1469,6 +1584,9 @@ void bm_battery_service_init(struct mtk_battery_manager *bm)
 	bs_data->psd.num_properties = ARRAY_SIZE(battery_props);
 	bs_data->psd.get_property = bs_psy_get_property;
 	bs_data->psd.set_property = bs_psy_set_property;
+/* N17 code for HQ-292280 by tongjiacheng at 20230610 start */
+	bs_data->psd.property_is_writeable = battery_psy_is_writeable;
+/* N17 code for HQ-292280 by tongjiacheng at 20230610 end */
 	bs_data->psd.external_power_changed =
 		mtk_battery_external_power_changed;
 	bs_data->psy_cfg.drv_data = bm;
@@ -1476,8 +1594,10 @@ void bm_battery_service_init(struct mtk_battery_manager *bm)
 	bs_data->bat_status = POWER_SUPPLY_STATUS_DISCHARGING,
 	bs_data->bat_health = POWER_SUPPLY_HEALTH_GOOD,
 	bs_data->bat_present = 1,
-	bs_data->bat_technology = POWER_SUPPLY_TECHNOLOGY_LION,
+	bs_data->bat_technology = POWER_SUPPLY_TECHNOLOGY_LIPO,
 	bs_data->bat_capacity = -1,
+	/*N17 code for HQHW-5058 by yeyinzi at 2023/8/28 */
+	bs_data->final_capacity = -1,
 	bs_data->bat_batt_vol = 0,
 	bs_data->bat_batt_temp = 0,
 
@@ -1490,6 +1610,10 @@ void bm_battery_service_init(struct mtk_battery_manager *bm)
 	bm->gm1->fixed_uisoc = 0xffff;
 	if (bm->gm_no == 2)
 		bm->gm2->fixed_uisoc = 0xffff;
+
+	/* gold: the gauge's attributes, on this power supply */
+	if (!IS_ERR(bm->bs_data.psy) && bm->gm1->create_sysfs)
+		bm->gm1->create_sysfs(bm->gm1);
 
 	mtk_battery_external_power_changed(bm->bs_data.psy);
 }

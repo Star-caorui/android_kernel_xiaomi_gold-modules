@@ -29,6 +29,12 @@
 #include <net/sock.h>		/* netlink */
 #include <linux/suspend.h>
 #include "mtk_battery.h"
+/*N17 code for HQ-299665 by miaozhichao at 2023/6/14 start*/
+#include "mtk_charger.h"
+/*N17 code for HQ-299665 by miaozhichao at 2023/6/14 end*/
+#include "mtk_charger_algorithm_class.h"
+#include "mtk_disp_notify.h"
+#include "tcpci_core.h"
 #include "mtk_battery_table.h"
 #if IS_ENABLED(CONFIG_MTK_AEE_FEATURE)
 #include <mt-plat/aee.h>
@@ -122,6 +128,112 @@ void disable_gauge_irq(struct mtk_gauge *gauge,
 		disable_irq_nosync(gauge->irq_no[irq]);
 }
 
+static void set_error(struct mtk_battery *gm)
+{
+	gm->smart_charge[SMART_CHG_STATUS_FLAG].en_ret = 1;
+	bm_err(gm, "xm %s en_ret=%d\n", __func__, gm->smart_charge[SMART_CHG_STATUS_FLAG].en_ret);
+}
+
+static void set_success(struct mtk_battery *gm)
+{
+	gm->smart_charge[SMART_CHG_STATUS_FLAG].en_ret = 0;
+	bm_err(gm, "xm %s en_ret=%d\n", __func__, gm->smart_charge[SMART_CHG_STATUS_FLAG].en_ret);
+}
+
+static int smart_chg_is_error(struct mtk_battery *gm)
+{
+	return gm->smart_charge[SMART_CHG_STATUS_FLAG].en_ret? true : false;
+}
+
+static void handle_smart_chg_functype(struct mtk_battery *gm,
+	const int func_type, const int en_ret, const int func_val)
+{
+	switch (func_type)
+	{
+	case SMART_CHG_FEATURE_MIN_NUM ... SMART_CHG_FEATURE_MAX_NUM:
+		gm->smart_charge[func_type].en_ret = en_ret;
+		gm->smart_charge[func_type].active_status = false;
+		gm->smart_charge[func_type].func_val = func_val;
+		set_success(gm);
+		bm_err(gm, "xm %s set func_type:%d, en_ret = %d\n", __func__, func_type, en_ret);
+		break;
+	default:
+		bm_err(gm, "xm %s ERROR: Not supported func type: %d\n", __func__, func_type);
+		set_error(gm);
+		break;
+	}
+}
+
+static int handle_smart_chg_functype_status(struct mtk_battery *gm)
+{
+	int i;
+	int all_func_status = 0;
+	all_func_status |= !!gm->smart_charge[SMART_CHG_STATUS_FLAG].en_ret;	//handle bit0
+
+	bm_debug(gm, "%s all_func_status =%#X, en_ret=%d\n", __func__, all_func_status, gm->smart_charge[SMART_CHG_STATUS_FLAG].en_ret);
+
+	/* save functype[i] enable status in all_func_status bit[i] */
+	for(i = SMART_CHG_FEATURE_MIN_NUM; i <= SMART_CHG_FEATURE_MAX_NUM; i++){  //handle bit1 ~ bit SMART_CHG_FEATURE_MAX_NUM
+		if(gm->smart_charge[i].en_ret)
+			all_func_status |= BIT_MASK(i);
+		else
+			all_func_status &= ~BIT_MASK(i);
+
+		bm_err(gm, "%s type:%d, en_ret=%d, active_status=%d,func_val=%d, all_func_status=%#X\n",
+			__func__, i, gm->smart_charge[i].en_ret, gm->smart_charge[i].active_status, gm->smart_charge[i].func_val,all_func_status);
+	}
+
+	bm_err(gm, "%s all_func_status:%#X\n", __func__, all_func_status);
+	return all_func_status;
+}
+
+static int smart_chg_set(struct mtk_battery *gm,
+	struct mtk_battery_sysfs_field_info *attr,
+	int val)
+{
+	// DECLEAR_BITMAP(func_type, SMART_CHG_FEATURE_MAX_NUM);
+	bool en_ret = val & 0x1;
+	unsigned long func_type = (val & 0xFFFE) >> 1;
+	int func_val = val >> 16;
+	int bit_pos;
+	int all_func_status;
+
+	bm_err(gm, "%s get val:%#X, func_type:%#lX, en_ret:%d, func_val:%d\n",
+		__func__,val, func_type, en_ret, func_val);
+
+	bit_pos = find_first_bit(&func_type, SMART_CHG_FEATURE_MAX_NUM);
+
+	/*	*/
+	if(bit_pos == SMART_CHG_FEATURE_MAX_NUM || find_next_bit(&func_type, SMART_CHG_FEATURE_MAX_NUM , bit_pos + 1) != SMART_CHG_FEATURE_MAX_NUM){
+		bm_err(gm, "%s ERROR: zero or more than one func type!\n", __func__);
+		bm_err(gm, "%s find_next_bit = %lu, bit_pos = %d\n",
+			__func__, find_next_bit(&func_type, SMART_CHG_FEATURE_MAX_NUM , bit_pos + 1), bit_pos);
+		set_error(gm);
+	} else
+		set_success(gm);
+
+	// if func_type bit0 is 1, bit_pos = 0, not 1. so ++bit_pos.
+	if(!smart_chg_is_error(gm))
+		handle_smart_chg_functype(gm, ++bit_pos, en_ret, func_val);
+
+	/* update smart_chg[0] status */
+	all_func_status = handle_smart_chg_functype_status(gm);
+	gm->smart_charge[SMART_CHG_STATUS_FLAG].en_ret = all_func_status & 0x1;
+	gm->smart_charge[SMART_CHG_STATUS_FLAG].active_status = (all_func_status & 0xFFFE) >> 1;
+
+	return 0;
+}
+
+static int smart_chg_get(struct mtk_battery *gm,
+	struct mtk_battery_sysfs_field_info *attr,
+	int *val)
+{
+	/* get latest functype status*/
+	*val = handle_smart_chg_functype_status(gm);
+	bm_err(gm, "%s val:%#X\n", __func__, *val);
+	return 0;
+}
+
 //Only return gauge1 for old platform
 struct mtk_battery *get_mtk_battery(void)
 {
@@ -152,7 +264,29 @@ bool is_algo_active(struct mtk_battery *gm)
 
 int fgauge_get_profile_id(struct mtk_battery *gm)
 {
-	return gm->battery_id;
+/* N17 code for HQ-292265 by tongjiacheng at 20230515 start */
+	int ret = 0;
+	int id = 0;
+	struct power_supply *psy;
+	union power_supply_propval val;
+
+	psy = power_supply_get_by_name("batt_verify");
+	if (psy) {
+		ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_TYPE,
+					&val);
+		if (ret) {
+			bm_err(gm, "%s get battery id fail, use battery0 profile\n", __func__);
+			id = 0;
+		}
+
+		if (val.intval != 0xff)
+			id =  val.intval;
+	}
+
+	bm_err(gm, "%s battery id=%d\n", __func__, id);
+
+	return id;
+  /* N17 code for HQ-292265 by tongjiacheng at 20230515 end */
 }
 
 int get_iavg_gap(struct mtk_battery *gm)
@@ -883,6 +1017,7 @@ int force_get_tbat(struct mtk_battery *gm, bool update)
 
 	return bat_temperature_val;
 }
+EXPORT_SYMBOL(force_get_tbat);
 
 void fg_update_porp_control(struct property_control *prop_control)
 {
@@ -2539,7 +2674,24 @@ static int temperature_set(struct mtk_battery *gm,
 	struct mtk_battery_sysfs_field_info *attr,
 	int val)
 {
+	/*N17 code for HQHW-4728 by yeyinzi at 2023/08/07 start*/
+	struct mtk_charger *info;
+	struct power_supply *psy;
+	/*N17 code for HQHW-4728 by yeyinzi at 2023/08/07 end*/
+
 	gm->fixed_bat_tmp = val;
+
+	/*N17 code for HQHW-4728 by yeyinzi at 2023/08/07 start*/
+	psy = power_supply_get_by_name("mtk-master-charger");
+	if (psy != NULL) {
+		info = (struct mtk_charger *) power_supply_get_drvdata(psy);
+		if (info != NULL) {
+			if(gm->fixed_bat_tmp > 47)
+			_wake_up_charger(info);
+		}
+	}
+	/*N17 code for HQHW-4728 by yeyinzi at 2023/08/07 end*/
+
 	bm_debug(gm, "%s %d\n", __func__, val);
 	return 0;
 }
@@ -2750,10 +2902,176 @@ static int reset_set(struct mtk_battery *gm,
 	return 0;
 }
 
+static int smart_batt_get(struct mtk_battery *gm,
+	struct mtk_battery_sysfs_field_info *attr,
+ 	int *val)
+ {
+	*val = gm->diff_fv_val;
+ 	bm_err(gm, "%s val:%d\n",
+ 		__func__, *val);
+	return 0;
+ }
+
+static int smart_batt_set(struct mtk_battery *gm,
+    struct mtk_battery_sysfs_field_info *attr,
+    int val)
+ {
+ 	smart_batt_set_diff_fv(val);
+ 	gm->diff_fv_val = val;
+ 	bm_err(gm, "%s val:%d\n",
+ 		__func__, val);
+	return 0;
+}
+
+/*
+ * gold: Type-C connection detection. While nothing is attached, the port
+ * only looks for a source (a charger) when the screen is off and no audio
+ * plays, and toggles as a dual-role port otherwise, to find OTG devices and
+ * audio accessories. rt_pd_manager puts a port that is unplugged in that
+ * state back to sink only.
+ */
+static int tcpm_set_drp_onoff(struct mtk_battery *gm, bool on)
+{
+	int ret;
+
+	ret = tcpm_typec_change_role_postpone(gm->cid.tcpc,
+			on ? TYPEC_ROLE_TRY_SNK : TYPEC_ROLE_SNK, true);
+	if (ret < 0)
+		bm_err(gm, "%s set drp onoff failed\n", __func__);
+
+	return ret;
+}
+
+static void set_drp_onoff(struct mtk_battery *gm)
+{
+	u8 cc1 = 0, cc2 = 0;
+	bool attached;
+	int ret;
+
+	if (IS_ERR_OR_NULL(gm) || !gm->cid.enable)
+		return;
+
+	if (IS_ERR_OR_NULL(gm->cid.tcpc)) {
+		gm->cid.tcpc = tcpc_dev_get_by_name("type_c_port0");
+		if (IS_ERR_OR_NULL(gm->cid.tcpc)) {
+			bm_err(gm, "%s get tcpc device fail\n", __func__);
+			gm->cid.tcpc = NULL;
+			return;
+		}
+		bm_err(gm, "%s get tcpc device success\n", __func__);
+	}
+
+	ret = tcpm_inquire_remote_cc(gm->cid.tcpc, &cc1, &cc2, true);
+	if (ret < 0)
+		bm_err(gm, "%s get cc status failed\n", __func__);
+	else
+		bm_err(gm, "%s cc1:%d cc2:%d\n", __func__, cc1, cc2);
+
+	attached = tcpm_inquire_typec_attach_state(gm->cid.tcpc) != TYPEC_UNATTACHED;
+	bm_err(gm, "%s cc status %s\n", __func__, attached ? "true" : "false");
+	if (ret < 0)
+		return;
+
+	bm_err(gm, "%s cc_status:%d screen_on:%d audio_on:%d\n", __func__,
+	       attached, gm->cid.screen_on, gm->cid.audio_on);
+
+	gm->cid.tcpc->cid_drp_off = !gm->cid.screen_on && !gm->cid.audio_on;
+	if (attached)
+		return;
+
+	if (gm->cid.screen_on || gm->cid.audio_on) {
+		bm_debug(gm, "%s set drp on\n", __func__);
+		tcpm_set_drp_onoff(gm, true);
+	} else {
+		bm_debug(gm, "%s set drp off\n", __func__);
+		tcpm_set_drp_onoff(gm, false);
+	}
+}
+
+static int screen_to_cid_notifier_callback(struct notifier_block *nb,
+					   unsigned long event, void *v)
+{
+	struct mtk_battery *gm = container_of(nb, struct mtk_battery, cid.disp_nb);
+	int *blank = v;
+
+	if (!gm->cid.enable)
+		return 0;
+
+	if (!blank) {
+		bm_err(gm, "%s Invalid blank\n", __func__);
+		return -1;
+	}
+
+	bm_debug(gm, "%s event=%lu, blank=%d\n", __func__, event, *blank);
+
+	if (event == MTK_DISP_EARLY_EVENT_BLANK && *blank == MTK_DISP_BLANK_POWERDOWN)
+		gm->cid.screen_on = 0;
+	else if (event == MTK_DISP_EVENT_BLANK && *blank == MTK_DISP_BLANK_UNBLANK)
+		gm->cid.screen_on = 1;
+
+	if (!gm->cid.audio_on)
+		set_drp_onoff(gm);
+
+	return 0;
+}
+
+static int cid_enable_get(struct mtk_battery *gm,
+	struct mtk_battery_sysfs_field_info *attr, int *val)
+{
+	*val = gm->cid.enable;
+	bm_debug(gm, "%s %d\n", __func__, *val);
+	return 0;
+}
+
+static int cid_enable_set(struct mtk_battery *gm,
+	struct mtk_battery_sysfs_field_info *attr, int val)
+{
+	gm->cid.enable = val;
+	bm_debug(gm, "%s %d\n", __func__, val);
+	return 0;
+}
+
+static int screen_on_get(struct mtk_battery *gm,
+	struct mtk_battery_sysfs_field_info *attr, int *val)
+{
+	*val = gm->cid.screen_on;
+	bm_debug(gm, "%s %d\n", __func__, *val);
+	return 0;
+}
+
+static int screen_on_set(struct mtk_battery *gm,
+	struct mtk_battery_sysfs_field_info *attr, int val)
+{
+	gm->cid.screen_on = val;
+	bm_debug(gm, "%s %d\n", __func__, val);
+	if (!gm->cid.audio_on)
+		set_drp_onoff(gm);
+	return 0;
+}
+
+static int audio_on_get(struct mtk_battery *gm,
+	struct mtk_battery_sysfs_field_info *attr, int *val)
+{
+	*val = gm->cid.audio_on;
+	bm_debug(gm, "%s %d\n", __func__, *val);
+	return 0;
+}
+
+static int audio_on_set(struct mtk_battery *gm,
+	struct mtk_battery_sysfs_field_info *attr, int val)
+{
+	gm->cid.audio_on = val;
+	bm_debug(gm, "%s %d\n", __func__, val);
+	if (!gm->cid.screen_on)
+		set_drp_onoff(gm);
+	return 0;
+}
+
 static ssize_t bat_sysfs_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct power_supply *psy;
+	struct mtk_battery_manager *bm;
 	struct mtk_battery *gm;
 	struct mtk_battery_sysfs_field_info *battery_attr;
 	int val;
@@ -2764,7 +3082,8 @@ static ssize_t bat_sysfs_store(struct device *dev,
 		return ret;
 
 	psy = dev_get_drvdata(dev);
-	gm = (struct mtk_battery *)power_supply_get_drvdata(psy);
+	bm = (struct mtk_battery_manager *)power_supply_get_drvdata(psy);
+	gm = bm->gm1;
 
 	battery_attr = container_of(attr,
 		struct mtk_battery_sysfs_field_info, attr);
@@ -2778,13 +3097,15 @@ static ssize_t bat_sysfs_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct power_supply *psy;
+	struct mtk_battery_manager *bm;
 	struct mtk_battery *gm;
 	struct mtk_battery_sysfs_field_info *battery_attr;
 	int val = 0;
 	ssize_t count;
 
 	psy = dev_get_drvdata(dev);
-	gm = (struct mtk_battery *)power_supply_get_drvdata(psy);
+	bm = (struct mtk_battery_manager *)power_supply_get_drvdata(psy);
+	gm = bm->gm1;
 
 	battery_attr = container_of(attr,
 		struct mtk_battery_sysfs_field_info, attr);
@@ -2817,6 +3138,13 @@ static struct mtk_battery_sysfs_field_info battery_sysfs_field_tbl[] = {
 	BAT_SYSFS_FIELD_WO(reset, BAT_PROP_FG_RESET),
 	BAT_SYSFS_FIELD_RW(log_level, BAT_PROP_LOG_LEVEL),
 	BAT_SYSFS_FIELD_WO(wakeup_fg, BAT_PROP_WAKEUP_FG_ALGO),
+	BAT_SYSFS_FIELD_RW(smart_batt, BAT_PROP_SMART_BATT),
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 start*/
+	BAT_SYSFS_FIELD_RW(smart_chg, BAT_PROP_SMART_CHG),
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 end*/
+	BAT_SYSFS_FIELD_RW(cid_enable, BAT_PROP_CID_ENABLE),
+	BAT_SYSFS_FIELD_RW(screen_on, BAT_PROP_SCREEN_ON),
+	BAT_SYSFS_FIELD_RW(audio_on, BAT_PROP_AUDIO_ON),
 };
 
 static struct attribute *
@@ -2836,6 +3164,17 @@ static int battery_sysfs_create_group(struct mtk_battery *gm)
 {
 	battery_sysfs_init_attrs();
 	return 0;
+}
+
+/* gold: the attributes above, on the battery power supply */
+static const struct attribute_group battery_sysfs_attr_group = {
+	.attrs = battery_sysfs_attrs,
+};
+
+static int mtk_battery_create_sysfs(struct mtk_battery *gm)
+{
+	return sysfs_create_group(&gm->bm->bs_data.psy->dev.kobj,
+				  &battery_sysfs_attr_group);
 }
 
 /* ============================================================ */
@@ -3300,7 +3639,7 @@ int battery_init(struct platform_device *pdev)
 	gm->log_level = BMLOG_ERROR_LEVEL;
 	gm->sw_iavg_gap = 3000;
 	gm->in_sleep = false;
-
+	gm->fake_bat_cycle = 0;
 	mutex_init(&gm->fg_update_lock);
 
 	init_waitqueue_head(&gm->wait_que);
@@ -3346,12 +3685,18 @@ int battery_init(struct platform_device *pdev)
 	fg_drv_thread_hrtimer_init(gm);
 	battery_sysfs_create_group(gm);
 	gm->battery_sysfs = battery_sysfs_field_tbl;
+	gm->create_sysfs = mtk_battery_create_sysfs;
 
 	/* for gauge hal hw ocv */
 	gm->battery_temp = force_get_tbat(gm, true);
 	//mtk_power_misc_init(gm);
 
 	ret = mtk_battery_daemon_init(pdev);
+
+	gm->cid.disp_nb.notifier_call = screen_to_cid_notifier_callback;
+	if (mtk_disp_notifier_register("TCPC_CID", &gm->cid.disp_nb))
+		bm_err(gm, "%s registe disp_notifier failed\n", __func__);
+
 	b_recovery_mode = is_recovery_mode(gm);
 	gm->is_probe_done = true;
 
@@ -3362,6 +3707,8 @@ int battery_init(struct platform_device *pdev)
 		battery_algo_init(gm);
 		bm_err(gm, "[%s]: enable Kernel mode Gauge\n", __func__);
 	}
+
+	gm->s_flag = LOW_FAST_NORMAL;
 
 	return 0;
 }
