@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-2.0
+
+config HQ_NOTIFIER
+	tristate "Huaqin's plug notifier"
+	depends on TCPC_CLASS
+	help
+	  Tells gold's board drivers (touchscreens, switch class) when something
+	  is plugged into the Type-C port or a headset into the 3.5 mm jack.
