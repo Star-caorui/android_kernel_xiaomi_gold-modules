@@ -189,6 +189,15 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 			/* set typec switch orientation */
 			typec_set_orientation(rpmd->typec_port[idx],
 					      TYPEC_ORIENTATION_NONE);
+			/* gold: with the screen off and no audio, no more DRP */
+			if (rpmd->tcpc[idx]->cid_drp_off) {
+				dev_info(rpmd->dev,
+					 "%s tcpc plugout with screen and audio off\n",
+					 __func__);
+				tcpm_typec_change_role_postpone(rpmd->tcpc[idx],
+								TYPEC_ROLE_SNK,
+								true);
+			}
 		} else if (!rpmd->partner[idx]) {
 			memset(&rpmd->partner_identity[idx], 0,
 			       sizeof(rpmd->partner_identity[idx]));
