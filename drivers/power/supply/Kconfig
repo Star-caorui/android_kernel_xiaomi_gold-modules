@@ -328,6 +328,13 @@ config CHARGER_SGM41516D
 	  and config MTK_SWCHR_SUPPORT
 	  Set to Yes if SGM41516D is used.
 
+config HQ_CHARGER_SYSFS
+	tristate "Huaqin's charger sysfs"
+	depends on MTK_CHARGER && TCPC_CLASS
+	help
+	  The usb power supply and the charging nodes gold's user space reads:
+	  the charger and Type-C state, input_suspend, the battery's supplier.
+
 config SC8551X_CHARGER
 	tristate "Southchip SC8551 charge pump"
 	depends on MTK_CHARGER

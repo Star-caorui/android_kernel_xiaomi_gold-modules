@@ -77,3 +77,4 @@ obj-y	+= battery_secrete/
 # obj-$(CONFIG_CHARGER_BQ2589X)	+= bq2589x_charger.o
 obj-$(CONFIG_CHARGER_BQ25605) += bq25601.o
 obj-$(CONFIG_XM_CHG_DFS)    += xm_chg_dfs.o
+obj-$(CONFIG_HQ_CHARGER_SYSFS) += hq_charger_sysfs.o
