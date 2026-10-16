@@ -21,36 +21,12 @@
 #include <linux/device.h>
 #include <linux/fs.h>
 #include <linux/err.h>
+#include <linux/hq_notifier.h>
 #include <linux/switch.h>
 
 struct class *switch_class;
 static atomic_t device_count;
 
-/* N17 code for HQ-291711 by liunianliang at 2023/06/03 start */
-static RAW_NOTIFIER_HEAD(earphone_chain);
-
-static int invoke_earphone_mode_noti_chain(unsigned long val, void *v)
-{
-	printk(KERN_DEBUG "%s\n", __func__);
-	return raw_notifier_call_chain(&earphone_chain, val, v);
-}
-
-int register_earphone_mode_notifier(struct notifier_block *nb)
-{
-	int err;
-	err = raw_notifier_chain_register(&earphone_chain, nb);
-	if(err) {
-		printk(KERN_DEBUG "%s error!\n", __func__);
-		goto out;
-	} else {
-		printk(KERN_DEBUG "%s success!\n", __func__);
-	}
-
-out:
-	return err;
-}
-EXPORT_SYMBOL_GPL(register_earphone_mode_notifier);
-/* N17 code for HQ-291711 by liunianliang at 2023/06/03 end */
 
 static ssize_t state_show(struct device *dev, struct device_attribute *attr,
 		char *buf)
@@ -120,10 +96,6 @@ void switch_set_state(struct switch_dev *sdev, int state)
 			printk(KERN_ERR "out of memory in switch_set_state\n");
 			kobject_uevent(&sdev->dev->kobj, KOBJ_CHANGE);
 		}
-
-		/* N17 code for HQ-291711 by liunianliang at 2023/06/03 start */
-		invoke_earphone_mode_noti_chain(EARPHONE_MODE_STATE, sdev);
-		/* N17 code for HQ-291711 by liunianliang at 2023/06/03 end */
 	}
 }
 EXPORT_SYMBOL_GPL(switch_set_state);
@@ -189,13 +161,59 @@ void switch_dev_unregister(struct switch_dev *sdev)
 }
 EXPORT_SYMBOL_GPL(switch_dev_unregister);
 
+/* Headsets, on the jack or the Type-C port, as h2w */
+static struct switch_dev h2w = {
+	.name = "h2w",
+};
+static struct notifier_block hq_nb;
+
+static int hq_notifier_callback(struct notifier_block *nb,
+				unsigned long event, void *data)
+{
+	int *status = data;
+
+	if (!status) {
+		pr_err("%s hq_notify_data is NULL!\n", __func__);
+		return 0;
+	}
+
+	pr_info("switch_class: %s, event=%lu, status=%d\n", __func__, event,
+		*status);
+
+	if (event == HQ_NOTIFY_EARPHONE || event == HQ_NOTIFY_TYPEC_EARPHONE)
+		switch_set_state(&h2w, *status);
+
+	return 0;
+}
+
 static int __init switch_class_init(void)
 {
-	return create_switch_class();
+	int ret;
+
+	ret = switch_dev_register(&h2w);
+	if (ret)
+		pr_err("%s switch_dev_register fail:%d!\n", __func__, ret);
+	else
+		pr_info("%s switch_dev_register pass!\n", __func__);
+
+	ret = create_switch_class();
+	if (ret)
+		return ret;
+
+	hq_nb.notifier_call = hq_notifier_callback;
+	ret = register_hq_notify(&hq_nb);
+	if (ret)
+		pr_err("%s register_hq_notify fail:%d!\n", __func__, ret);
+	else
+		pr_info("%s register_hq_notify pass!\n", __func__);
+
+	return ret;
 }
 
 static void __exit switch_class_exit(void)
 {
+	unregister_hq_notify(&hq_nb);
+	switch_dev_unregister(&h2w);
 	class_destroy(switch_class);
 }
 

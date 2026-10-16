@@ -2,5 +2,6 @@
 
 config SWITCH
 	tristate "Switch class support"
+	depends on HQ_NOTIFIER
 	help
 	  Monitoring switches by userspace via sysfs and uevent.

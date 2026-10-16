@@ -18,10 +18,6 @@
 #ifndef __LINUX_SWITCH_H__
 #define __LINUX_SWITCH_H__
 
-/* N17 code for HQ-291711 by liunianliang at 2023/06/03 start */
-#include <linux/notifier.h>
-/* N17 code for HQ-291711 by liunianliang at 2023/06/03 end */
-
 #define NAME_MAX_LEN 10
 
 struct switch_dev {
@@ -55,13 +51,5 @@ static inline int switch_get_state(struct switch_dev *sdev)
 }
 
 extern void switch_set_state(struct switch_dev *sdev, int state);
-
-enum EARPHONE_STATE {
-    EARPHONE_MODE_STATE = 15,
-};
-
-/* N17 code for HQ-291711 by liunianliang at 2023/06/03 start */
-extern int register_earphone_mode_notifier(struct notifier_block *nb);
-/* N17 code for HQ-291711 by liunianliang at 2023/06/03 end */
 
 #endif
