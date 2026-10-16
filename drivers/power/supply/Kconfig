@@ -328,5 +328,19 @@ config CHARGER_SGM41516D
 	  and config MTK_SWCHR_SUPPORT
 	  Set to Yes if SGM41516D is used.
 
+config SC8551X_CHARGER
+	tristate "Southchip SC8551 charge pump"
+	depends on MTK_CHARGER
+	help
+	  The SC8551 divide-by-two charge pump of gold's fast charging, as an
+	  MTK charger class device.
+
+config LN8000_CHARGER
+	tristate "Cirrus Logic LN8000 charge pump"
+	depends on MTK_CHARGER
+	help
+	  The LN8000 divide-by-two charge pump of gold's fast charging, as an
+	  MTK charger class device.
+
 source "$(KCONFIG_EXT_PREFIX)drivers/power/supply/ufcs/Kconfig"
 source "$(KCONFIG_EXT_PREFIX)drivers/power/supply/battery_secrete/Kconfig"
