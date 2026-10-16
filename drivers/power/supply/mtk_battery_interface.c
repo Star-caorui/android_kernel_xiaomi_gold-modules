@@ -381,11 +381,11 @@ int get_shutdown_cond(struct mtk_battery *gm)
 	sdu = &gm->bm->sdc.bat[gm->id];
 
 	if (sdu->shutdown_status.is_soc_zero_percent)
-		pr_err("[%s]soc_zero_percent not shutdown\n", __func__);
+		ret |= 1;
 	if (sdu->shutdown_status.is_uisoc_one_percent)
-		pr_err("[%s]uisoc_one_percent not shutdown\n", __func__);
+		ret |= 1;
 	if (sdu->lowbatteryshutdown)
-		pr_err("[%s]lowbatteryshutdown not shutdown\n", __func__);
+		ret |= 1;
 
 	if (gm->bm->gm_no == 2) {
 		if (gm->bm->sdc.bmsdu.lowbatteryshutdown)
@@ -841,7 +841,7 @@ void battery_update(struct mtk_battery_manager *bm)
 		bat_data->bat_batt_temp = bm->gm1->battery_temp;
 	}
 
-	bat_data->bat_technology = POWER_SUPPLY_TECHNOLOGY_LIPO;
+	bat_data->bat_technology = POWER_SUPPLY_TECHNOLOGY_LION;
 	bat_data->bat_health = POWER_SUPPLY_HEALTH_GOOD;
 	bat_data->bat_present = 1;
 

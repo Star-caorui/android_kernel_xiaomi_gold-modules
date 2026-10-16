@@ -33,12 +33,9 @@
 #if IS_ENABLED(CONFIG_MTK_AEE_FEATURE)
 #include <mt-plat/aee.h>
 #endif
-#include <linux/hardware_info.h>
 
-#include "../../power/supply/wt_chg/charger_class/charger_class.h"
 
 struct mtk_battery *gmb;
-EXPORT_SYMBOL(gmb);
 
 struct tag_bootmode {
 	u32 size;
@@ -148,61 +145,13 @@ struct mtk_battery *get_mtk_battery(void)
 	return bm->gm1;
 }
 
-bool is_kernel_power_off_charging_lcd(void)
-{
-	struct mtk_battery *gm;
-
-	gm = get_mtk_battery();
-  	if (gm == NULL){
-          	pr_err("%s, return false because of NULL\n", __func__);
-		return false;
-        }
-	pr_err("%s, bootmdoe = %d\n", __func__ ,gm->bootmode);
-
-	/* KERNEL_POWER_OFF_CHARGING_BOOT */
-	if (gm->bootmode == 8)
-		return true;
-
-	return false;
-}
-EXPORT_SYMBOL(is_kernel_power_off_charging_lcd);
-
 bool is_algo_active(struct mtk_battery *gm)
 {
 	return gm->algo.active;
 }
 
-#define MAX_BAT_NUM   2
-struct bat_id_res_range {
-	int low;
-	int high;
-};
-struct bat_id_res_range bat_id_res_table[MAX_BAT_NUM] = {{285,380},{55,85}};
-
 int fgauge_get_profile_id(struct mtk_battery *gm)
 {
-	int i;
-	for(i = 0; i < MAX_BAT_NUM; i++){
-		if(gm->battery_id_res > bat_id_res_table[i].low && gm->battery_id_res < bat_id_res_table[i].high)
-			break;
-	}
-	switch(i){
-	case 0:
-		hardwareinfo_set_prop(HARDWARE_BATTERY_ID, "battery_SWD_6650mAh");
-		bm_err(gm, "[%s]switch to battery_id = %d\n", __func__, i);
-		break;
-	case 1:
-		hardwareinfo_set_prop(HARDWARE_BATTERY_ID, "battery_NVT_6650mAh");
-		bm_err(gm, "[%s]switch to battery_id = %d\n", __func__, i);
-		break;
-	default:
-		hardwareinfo_set_prop(HARDWARE_BATTERY_ID, "unknown_battery");
-		bm_err(gm, "[%s]switch to battery_id = %d\n", __func__, i);
-		i = 1;
-		break;
-	}
-	gm->battery_id  = i;
-	bm_err(gm, "[%s]battery_id = %d\n",__func__, i);
 	return gm->battery_id;
 }
 
@@ -2803,9 +2752,8 @@ static int reset_set(struct mtk_battery *gm,
 
 static ssize_t bat_sysfs_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
-{	
+{
 	struct power_supply *psy;
-	struct mtk_gauge *gauge;
 	struct mtk_battery *gm;
 	struct mtk_battery_sysfs_field_info *battery_attr;
 	int val;
@@ -2816,8 +2764,7 @@ static ssize_t bat_sysfs_store(struct device *dev,
 		return ret;
 
 	psy = dev_get_drvdata(dev);
-	gauge = (struct mtk_gauge *)power_supply_get_drvdata(psy);
-	gm = gauge->gm;
+	gm = (struct mtk_battery *)power_supply_get_drvdata(psy);
 
 	battery_attr = container_of(attr,
 		struct mtk_battery_sysfs_field_info, attr);
@@ -2831,15 +2778,13 @@ static ssize_t bat_sysfs_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct power_supply *psy;
-	struct mtk_gauge *gauge;
 	struct mtk_battery *gm;
 	struct mtk_battery_sysfs_field_info *battery_attr;
 	int val = 0;
 	ssize_t count;
 
 	psy = dev_get_drvdata(dev);
-	gauge = (struct mtk_gauge *)power_supply_get_drvdata(psy);
-	gm = gauge->gm;
+	gm = (struct mtk_battery *)power_supply_get_drvdata(psy);
 
 	battery_attr = container_of(attr,
 		struct mtk_battery_sysfs_field_info, attr);
@@ -2858,49 +2803,6 @@ static int wakeup_fg_set(struct mtk_battery *gm,
 	return 0;
 }
 
-extern void charger_set_chg_en(bool en);
-static int StopCharging_Test_set(struct mtk_battery *gm,
-	struct mtk_battery_sysfs_field_info *attr,
-	int val)
-{
-	return -1;
-}
-
-static int StopCharging_Test_get(struct mtk_battery *gm,
-	struct mtk_battery_sysfs_field_info *attr,
-	int *val)
-{
-	charger_set_chg_en(false);
-	*val = 1;
-	bm_err(gm, "[%s] success!!!\n",__func__);
-	return 0;
-}
-
-static int StartCharging_Test_set(struct mtk_battery *gm,
-	struct mtk_battery_sysfs_field_info *attr,
-	int val)
-{
-	return -1;
-}
-
-static int StartCharging_Test_get(struct mtk_battery *gm,
-	struct mtk_battery_sysfs_field_info *attr,
-	int *val)
-{
-	charger_set_chg_en(true);
-	*val = 1;
-	bm_err(gm, "[%s] success!!!\n",__func__);
-	return 0;
-}
-
-static int fake_cycle_count_set(struct mtk_battery *gm,
-	struct mtk_battery_sysfs_field_info *attr,
-	int val)
-{
-	gm->bat_cycle = val;
-	return 0;
-}
-
 /* Must be in the same order as BAT_PROP_* */
 static struct mtk_battery_sysfs_field_info battery_sysfs_field_tbl[] = {
 	BAT_SYSFS_FIELD_RW(temperature, BAT_PROP_TEMPERATURE),
@@ -2915,17 +2817,10 @@ static struct mtk_battery_sysfs_field_info battery_sysfs_field_tbl[] = {
 	BAT_SYSFS_FIELD_WO(reset, BAT_PROP_FG_RESET),
 	BAT_SYSFS_FIELD_RW(log_level, BAT_PROP_LOG_LEVEL),
 	BAT_SYSFS_FIELD_WO(wakeup_fg, BAT_PROP_WAKEUP_FG_ALGO),
-	BAT_SYSFS_FIELD_RW(StopCharging_Test, BAT_PROP_STOPCHARGING_TEST),
-	BAT_SYSFS_FIELD_RW(StartCharging_Test, BAT_PROP_STARTCHARGING_TEST),
-  	BAT_SYSFS_FIELD_WO(fake_cycle_count, BAT_PROP_FAKE_CYCLE_COUNT),
 };
 
 static struct attribute *
 	battery_sysfs_attrs[ARRAY_SIZE(battery_sysfs_field_tbl) + 1];
-
-static const struct attribute_group battery_sysfs_attr_group = {
-	.attrs = battery_sysfs_attrs,
-};
 
 static void battery_sysfs_init_attrs(void)
 {
@@ -2937,11 +2832,10 @@ static void battery_sysfs_init_attrs(void)
 	battery_sysfs_attrs[limit] = NULL; /* Has additional entry for this */
 }
 
-int battery_sysfs_create_group(struct mtk_battery *gm)
+static int battery_sysfs_create_group(struct mtk_battery *gm)
 {
 	battery_sysfs_init_attrs();
-	return sysfs_create_group(&gm->gauge->psy->dev.kobj,
-  			&battery_sysfs_attr_group);
+	return 0;
 }
 
 /* ============================================================ */
@@ -3392,7 +3286,6 @@ int fg_prop_control_init(struct mtk_battery *gm)
 	return 0;
 }
 
-extern int chg_batt_id_res;
 int battery_init(struct platform_device *pdev)
 {
 	int ret = 0;
@@ -3407,8 +3300,6 @@ int battery_init(struct platform_device *pdev)
 	gm->log_level = BMLOG_ERROR_LEVEL;
 	gm->sw_iavg_gap = 3000;
 	gm->in_sleep = false;
-	gm->battery_id_res = chg_batt_id_res;
-	bm_err(gm, "[%s]batid_res = %d\n", __func__,gm->battery_id_res);
 
 	mutex_init(&gm->fg_update_lock);
 
@@ -3471,6 +3362,6 @@ int battery_init(struct platform_device *pdev)
 		battery_algo_init(gm);
 		bm_err(gm, "[%s]: enable Kernel mode Gauge\n", __func__);
 	}
-	hardwareinfo_set_prop(HARDWARE_BMS_GAUGE, "mt6358_gauge");
+
 	return 0;
 }

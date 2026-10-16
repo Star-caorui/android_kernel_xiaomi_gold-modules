@@ -136,9 +136,6 @@ enum battery_property {
 	BAT_PROP_FG_RESET,
 	BAT_PROP_LOG_LEVEL,
 	BAT_PROP_WAKEUP_FG_ALGO,
-	BAT_PROP_STOPCHARGING_TEST,
-	BAT_PROP_STARTCHARGING_TEST,
-	BAT_PROP_FAKE_CYCLE_COUNT,
 };
 
 enum property_control_data {
@@ -940,7 +937,7 @@ struct irq_controller {
 #define SHUTDOWN_TIME 40
 #define AVGVBAT_ARRAY_SIZE 30
 #define INIT_VOLTAGE 3450
-#define BATTERY_SHUTDOWN_TEMPERATURE 58
+#define BATTERY_SHUTDOWN_TEMPERATURE 60
 #define DISABLE_POWER_PATH_VOLTAGE 2800
 
 struct shutdown_condition {
@@ -1116,9 +1113,7 @@ struct mtk_battery {
 
 	/*for bat prop*/
 	int no_prop_timeout_control;
-	bool shippingmode;
-	bool control_cc_toggle;
-	bool input_suspend;
+
 	/* adb */
 	int fixed_bat_tmp;
 	int fixed_uisoc;
@@ -1274,8 +1269,6 @@ struct mtk_battery {
 	struct fuel_gauge_custom_data fg_cust_data;
 	struct fuel_gauge_table_custom_data fg_table_cust_data;
 	struct fgd_cmd_param_t_custom fg_data;
-	int battery_id_res;
-	struct charger_dev *use_charge;
 
 	/*daemon version control*/
 	struct VersionControl fg_version;
@@ -1779,9 +1772,5 @@ extern void mtk_irq_thread_init(struct mtk_battery *gm);
 #define BATTERY_ID_CHANNEL_NUM	1
 #define BATTERY_PROFILE_ID		0
 #define TOTAL_BATTERY_NUMBER	4
-
-extern int charger_manager_get_prop_system_temp_level(void);
-extern int charger_manager_get_prop_system_temp_level_max(void);
-extern void charger_manager_set_prop_system_temp_level(int temp_level);
 
 #endif /* __MTK_BATTERY_INTF_H__ */

@@ -4844,15 +4844,11 @@ void fg_bat_temp_int_sw_check(struct mtk_battery *gm)
 		fg_bat_temp_int_internal(gm);
 
 	if (gm->cur_bat_temp >= BATTERY_SHUTDOWN_TEMPERATURE) {
-		bm_err(gm,
+		bm_debug(gm,
 			"%d battery temperature >= %d,shutdown",
 			gm->cur_bat_temp, BATTERY_SHUTDOWN_TEMPERATURE);
-		/* 8 = KERNEL_POWER_OFF_CHARGING_BOOT */
-		/* 9 = LOW_POWER_OFF_CHARGING_BOOT */
-		if (gm->bootmode != 8 && gm->bootmode != 9)
-			set_shutdown_cond(gm, OVERHEAT);
+		set_shutdown_cond(gm, OVERHEAT);
 	}
-
 }
 
 void fg_int_event(struct mtk_battery *gm, enum gauge_event evt)

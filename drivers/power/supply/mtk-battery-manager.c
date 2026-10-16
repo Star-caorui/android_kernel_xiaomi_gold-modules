@@ -725,157 +725,6 @@ void bm_check_bootmode(struct device *dev,
 	}
 }
 
-extern struct mtk_battery *gmb;
-extern void charger_manager_set_shipmode(bool en);
-static ssize_t show_shipmode_count_reset(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	bm_err(gmb, "%s show ship_mode:%d\n", __func__, gmb->shippingmode);
-	return sprintf(buf, "%d\n", gmb->shippingmode);
-}
-static ssize_t store_shipmode_count_reset(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t size)
-{
-	int val = 0;
-	int ret;
-	bm_err(gmb, "[%s]\n", __func__);
-	if (buf != NULL && size != 0) {
-		bm_err(gmb, "[%s] buf is %s\n", __func__, buf);
-		ret = kstrtoint(buf, 10, &val);
-		if (ret < 0) {
-			bm_err(gmb, "[%s] val is %d ??\n", __func__, val);
-			val = 0;
-		}
-		gmb->shippingmode = val;
-		charger_manager_set_shipmode(gmb->shippingmode);
-		bm_err(gmb, "%s store ship_mode:%d\n", __func__, val);
-	}
-	return size;
-}
-static DEVICE_ATTR(shipmode_count_reset, 0664, show_shipmode_count_reset, store_shipmode_count_reset);
-
-#define MAX_BAT_NUM   2
-struct bat_id_res_range {
-	int low;
-	int high;
-};
-static char* battery_name[MAX_BAT_NUM+1] = {"battery_SWD_6650mAh", "battery_NVT_6650mAh", "unknown_battery"};
-static struct bat_id_res_range bat_id_res_table[MAX_BAT_NUM] = {{285,380},{55,85}};
-static ssize_t show_battery_type(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	int i;
-    	for(i = 0; i < MAX_BAT_NUM; i++){
-		if(gmb->battery_id_res > bat_id_res_table[i].low && gmb->battery_id_res < bat_id_res_table[i].high)
-			break;
-	}
-	bm_err(gmb, "%s show battery_type:%d\n", __func__, i);
-	return sprintf(buf, "%s\n", battery_name[i]);
-}
-static ssize_t store_battery_type(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t size)
-{
-	return -1;
-}
-static DEVICE_ATTR(battery_type, 0664, show_battery_type, store_battery_type);
-
-extern void charger_set_suspend_current(bool en);
-extern void charger_set_chg_en(bool en);
-static ssize_t show_input_suspend(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	bm_err(gmb, "%s show ship_mode:%d\n", __func__, gmb->input_suspend);
-	return sprintf(buf, "%d\n", gmb->input_suspend);
-}
-
-static ssize_t store_input_suspend(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t size)
-{
-	int val = 0;
-	int ret;
-	bm_err(gmb, "[%s]\n", __func__);
-	if (buf != NULL && size != 0) {
-		bm_err(gmb, "[%s] buf is %s\n", __func__, buf);
-		ret = kstrtoint(buf, 10, &val);
-		if (ret < 0) {
-			bm_err(gmb, "[%s] val is %d ??\n", __func__, val);
-			val = 0;
-		}
-		gmb->input_suspend = val;
-		if (gmb->input_suspend) {
-			charger_set_suspend_current(true);
-			charger_set_chg_en(false);
-		} else {
-			charger_set_suspend_current(false);
-			charger_set_chg_en(true);
-		}
-		bm_err(gmb, "%s store ship_mode:%d\n", __func__, val);
-	}
-	return size;
-}
-static DEVICE_ATTR(input_suspend, 0664, show_input_suspend, store_input_suspend);
-
-extern void manual_set_cc_toggle(bool en);
-extern void manual_get_cc_toggle(bool *cc_toggle);
-extern bool manual_get_cid_status(void);
-static ssize_t show_otg_ui_support(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	bm_err(gmb, "show otg_ui_support 1\n");
-	return sprintf(buf, "%d\n", 1);
-}
-
-static ssize_t store_otg_ui_support(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t size)
-{
-	return -1;
-}
-static DEVICE_ATTR(otg_ui_support, 0664, show_otg_ui_support, store_otg_ui_support);
-
-static ssize_t show_cid_status(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	int val = 0;
-	val = manual_get_cid_status();
-	return sprintf(buf, "%d\n", val);
-}
-
-static ssize_t store_cid_status(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t size)
-{
-	return -1;
-}
-static DEVICE_ATTR(cid_status, 0664, show_cid_status, store_cid_status);
-
-static ssize_t show_cc_toggle(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	manual_get_cc_toggle(&gmb->control_cc_toggle);
-	bm_err(gmb, "[%s] cc_toggle: %d\n", __func__, !!gmb->control_cc_toggle);
-	return sprintf(buf, "%d\n", !!gmb->control_cc_toggle);
-}
-
-static ssize_t store_cc_toggle(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t size)
-{
-	int val = 0;
-	int ret;
-	bm_err(gmb, "[%s]\n", __func__);
-	if (buf != NULL && size != 0) {
-		bm_err(gmb, "[%s] buf is %s\n", __func__, buf);
-		ret = kstrtoint(buf, 10, &val);
-		if (ret < 0) {
-			bm_err(gmb, "[%s] val is %d ??\n", __func__, val);
-			val = 0;
-		}
-		gmb->control_cc_toggle = val;
-		manual_set_cc_toggle(!!val);
-		bm_err(gmb, "%s store cc_toggle val:%d,!!val:%d\n", __func__, val, !!val);
-	}
-	return size;
-}
-static DEVICE_ATTR(cc_toggle, 0664, show_cc_toggle, store_cc_toggle);
-
 static void bm_update_status(struct mtk_battery_manager *bm)
 {
 
@@ -1168,8 +1017,6 @@ static enum power_supply_property battery_props[] = {
 	POWER_SUPPLY_PROP_TIME_TO_FULL_NOW,
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE,
-	POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT,
-	POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT_MAX,
 };
 
 static int bm_update_psy_property(struct mtk_battery *gm, enum bm_psy_prop prop)
@@ -1238,7 +1085,6 @@ static int bm_update_psy_property(struct mtk_battery *gm, enum bm_psy_prop prop)
 	return ret_val;
 }
 
-extern bool get_jeita_high_temp_state(void);
 static int bs_psy_get_property(struct power_supply *psy,
 	enum power_supply_property psp,
 	union power_supply_propval *val)
@@ -1248,14 +1094,12 @@ static int bs_psy_get_property(struct power_supply *psy,
 	int curr_avg = 0;
 	int remain_ui = 0, remain_mah = 0;
 	int time_to_full = 0;
-//	int q_max_uah = 0;
+	int q_max_uah = 0;
 	int volt_now = 0;
 	int count = 0;
 	int temp = 0;
-	int charge_full;
 	struct mtk_battery_manager *bm;
 	struct battery_data *bs_data;
-	union power_supply_propval status;
 
 	bm = (struct mtk_battery_manager *)power_supply_get_drvdata(psy);
 	bs_data = &bm->bs_data;
@@ -1264,24 +1108,7 @@ static int bs_psy_get_property(struct power_supply *psy,
 	/* to avoid i2c suspend but query by other module */
 	switch (psp) {
 	case POWER_SUPPLY_PROP_STATUS:
-            	if (IS_ERR_OR_NULL(bs_data->chg_psy)){
-                  	bs_data->chg_psy = power_supply_get_by_name("usb");
-                  	if (IS_ERR_OR_NULL(bs_data->chg_psy)){
-                  		val->intval = bs_data->bat_status;
-                  		break;
-                        }
-                }
-		ret = power_supply_get_property(bs_data->chg_psy,
-			POWER_SUPPLY_PROP_STATUS, &status);
-		if (status.intval == POWER_SUPPLY_STATUS_FULL && !get_jeita_high_temp_state()){
-			val->intval = POWER_SUPPLY_STATUS_FULL;
-		} else {
-			val->intval = bs_data->bat_status;
-		}
-
-		if (gmb->input_suspend == true){
-			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
-		}
+		val->intval = bs_data->bat_status;
 		break;
 	case POWER_SUPPLY_PROP_HEALTH:
 		val->intval = bs_data->bat_health;
@@ -1321,9 +1148,6 @@ static int bs_psy_get_property(struct power_supply *psy,
 			val->intval = bm->gm1->fixed_uisoc;
 		else
 			val->intval = bs_data->bat_capacity;
-		
-		if (val->intval == 0)
-			val->intval = 1;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
 
@@ -1350,13 +1174,16 @@ static int bs_psy_get_property(struct power_supply *psy,
 		ret = 0;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
-		charge_full = bm->gm1->algo_qmax * bm->gm1->aging_factor / 100;
-		pr_err(" algo qmax:%d, aging_factor:%d, charge_full:%d\n",
-					bm->gm1->algo_qmax, bm->gm1->aging_factor, charge_full);
-		if (charge_full > 6650000)
-			val->intval = 6650000;
-		else
-			val->intval = charge_full;
+
+		if (bm->gm1 != NULL)
+			if(!bm->gm1->bat_plug_out)
+				qmax += bm_update_psy_property(bm->gm1, QMAX_DESIGN);
+		if (bm->gm2 != NULL)
+			if(!bm->gm2->bat_plug_out)
+				qmax += bm_update_psy_property(bm->gm2, QMAX_DESIGN);
+
+		val->intval = qmax * 100;
+		ret = 0;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
 
@@ -1435,11 +1262,32 @@ static int bs_psy_get_property(struct power_supply *psy,
 		ret = 0;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-		val->intval = 6650000;
+		if (check_cap_level(bs_data->bat_capacity) ==
+			POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN) {
+			val->intval = 0;
+			break;
+		}
+
+		if (bm->gm1 != NULL)
+			if(!bm->gm1->bat_plug_out)
+				qmax += bm_update_psy_property(bm->gm1, QMAX_DESIGN);
+		if (bm->gm2 != NULL)
+			if(!bm->gm2->bat_plug_out)
+				qmax += bm_update_psy_property(bm->gm2, QMAX_DESIGN);
+
+		q_max_uah = qmax * 100;
+		if (q_max_uah <= 100000) {
+			pr_debug("%s gm_no:%d, q_max:%d q_max_uah:%d\n",
+				__func__, bm->gm_no, qmax, q_max_uah);
+			q_max_uah = 100001;
+		}
+		val->intval = q_max_uah;
+
 		break;
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
 		if (IS_ERR_OR_NULL(bs_data->chg_psy)) {
-			bs_data->chg_psy = power_supply_get_by_name("usb");
+			bs_data->chg_psy = devm_power_supply_get_by_phandle(
+				bm->dev, "charger");
 			pr_err("%s retry to get chg_psy\n", __func__);
 		}
 		if (IS_ERR_OR_NULL(bs_data->chg_psy)) {
@@ -1454,12 +1302,7 @@ static int bs_psy_get_property(struct power_supply *psy,
 			}
 		}
 		break;
-	case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT:
-			val->intval = charger_manager_get_prop_system_temp_level();
-			break ;
-	case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT_MAX:
-			val->intval = charger_manager_get_prop_system_temp_level_max();
-			break ;
+
 
 	default:
 		ret = -EINVAL;
@@ -1469,18 +1312,6 @@ static int bs_psy_get_property(struct power_supply *psy,
 	//pr_err("%s psp:%d ret:%d val:%d", __func__, psp, ret, val->intval);
 
 	return ret;
-}
-
-static int battery_prop_is_writeable(struct power_supply *psy,
-		enum power_supply_property psp)
-{
-	switch (psp){
-	case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT:
-			return 1;
-	default:
-			break;
-	}
-	return 0;
 }
 
 static int bs_psy_set_property(struct power_supply *psy,
@@ -1495,9 +1326,6 @@ static int bs_psy_set_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
 		if (val->intval > 0)
 			bm_send_cmd(bm, MANAGER_DYNAMIC_CV, val->intval);
-		break;
-        case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT:
-		charger_manager_set_prop_system_temp_level(val->intval);
 		break;
 	default:
 		ret = -EINVAL;
@@ -1541,10 +1369,9 @@ static void mtk_battery_external_power_changed(struct power_supply *psy)
 	}
 
 	if (IS_ERR_OR_NULL(chg_psy)) {
+		chg_psy = devm_power_supply_get_by_phandle(bm->dev,
+						       "charger");
 		pr_err("%s retry to get chg_psy\n", __func__);
-		chg_psy = power_supply_get_by_name("usb");
-		if (IS_ERR_OR_NULL(chg_psy)) 
-			pr_err("%s retry failed\n", __func__);
 		bs_data->chg_psy = chg_psy;
 	} else {
 		ret |= power_supply_get_property(chg_psy,
@@ -1599,7 +1426,7 @@ static void mtk_battery_external_power_changed(struct power_supply *psy)
 
 		/* check charger type */
 		ret = power_supply_get_property(chg_psy,
-			POWER_SUPPLY_PROP_TYPE, &prop_type);
+			POWER_SUPPLY_PROP_USB_TYPE, &prop_type);
 
 		/* plug in out */
 		cur_chr_type = prop_type.intval;
@@ -1642,7 +1469,6 @@ void bm_battery_service_init(struct mtk_battery_manager *bm)
 	bs_data->psd.num_properties = ARRAY_SIZE(battery_props);
 	bs_data->psd.get_property = bs_psy_get_property;
 	bs_data->psd.set_property = bs_psy_set_property;
-	bs_data->psd.property_is_writeable = battery_prop_is_writeable,
 	bs_data->psd.external_power_changed =
 		mtk_battery_external_power_changed;
 	bs_data->psy_cfg.drv_data = bm;
@@ -1650,8 +1476,8 @@ void bm_battery_service_init(struct mtk_battery_manager *bm)
 	bs_data->bat_status = POWER_SUPPLY_STATUS_DISCHARGING,
 	bs_data->bat_health = POWER_SUPPLY_HEALTH_GOOD,
 	bs_data->bat_present = 1,
-	bs_data->bat_technology = POWER_SUPPLY_TECHNOLOGY_LIPO,
-	bs_data->bat_capacity = 50,
+	bs_data->bat_technology = POWER_SUPPLY_TECHNOLOGY_LION,
+	bs_data->bat_capacity = -1,
 	bs_data->bat_batt_vol = 0,
 	bs_data->bat_batt_temp = 0,
 
@@ -2081,26 +1907,18 @@ static int mtk_bm_probe(struct platform_device *pdev)
 
 	kthread_run(battery_manager_routine_thread, bm, "battery_manager_thread");
 
-	bm->bs_data.chg_psy = power_supply_get_by_name("usb");
+	bm->bs_data.chg_psy = devm_power_supply_get_by_phandle(&pdev->dev, "charger");
 	if (IS_ERR_OR_NULL(bm->bs_data.chg_psy))
 		pr_err("[%s]Fail to get chg_psy!\n", __func__);
 
 	bm_battery_service_init(bm);
 	mtk_bm_create_netlink(pdev);
-	
+
 	mtk_power_misc_init(bm, &bm->sdc);
 
 	bm->sdc.sdc_wakelock = wakeup_source_register(NULL, "battery_manager_sdc_wakelock");
 	spin_lock_init(&bm->sdc.slock);
 
-	bm->gm1->shippingmode = 0;
-	ret = device_create_file(&bm->bs_data.psy->dev, &dev_attr_shipmode_count_reset);
-	ret = device_create_file(&bm->bs_data.psy->dev, &dev_attr_battery_type);
-	bm->gm1->input_suspend = false;
-	ret = device_create_file(&bm->bs_data.psy->dev, &dev_attr_input_suspend);
-	ret = device_create_file(&bm->bs_data.psy->dev, &dev_attr_otg_ui_support);
-	ret = device_create_file(&bm->bs_data.psy->dev, &dev_attr_cid_status);
-	ret = device_create_file(&bm->bs_data.psy->dev, &dev_attr_cc_toggle);
 	return 0;
 }
 
