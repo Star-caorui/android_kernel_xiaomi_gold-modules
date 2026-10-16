@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: GPL-2.0
+
+config ONEWIRE_GPIO
+	tristate "Battery authentication class and its one-wire GPIO"
+	help
+	  The battery_auth class the battery's authentication chips register
+	  with, and the GPIO of their one-wire bus.
+
+config BATT_VERIFY_BY_DS28E30
+	tristate "Maxim DS28E30 battery authentication"
+	depends on ONEWIRE_GPIO
+
+config BATT_VERIFY_BY_SLG
+	tristate "SLG battery authentication"
+	depends on ONEWIRE_GPIO
+
+config BATT_VERIFY_BY_ST
+	tristate "ST STICK battery authentication"
+	depends on ONEWIRE_GPIO
+
+config BATT_VERIFY
+	tristate "Battery authentication"
+	depends on ONEWIRE_GPIO
+	help
+	  Authenticates the battery with whichever of its chips answers and
+	  reports the result on the batt_verify power supply.

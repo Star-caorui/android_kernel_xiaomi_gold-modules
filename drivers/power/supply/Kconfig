@@ -329,3 +329,4 @@ config CHARGER_SGM41516D
 	  Set to Yes if SGM41516D is used.
 
 source "$(KCONFIG_EXT_PREFIX)drivers/power/supply/ufcs/Kconfig"
+source "$(KCONFIG_EXT_PREFIX)drivers/power/supply/battery_secrete/Kconfig"
