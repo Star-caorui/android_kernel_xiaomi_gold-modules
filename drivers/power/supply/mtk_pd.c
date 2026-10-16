@@ -68,7 +68,8 @@ module_param(algo_waiver_test, bool, 0644);
 
 int pd_get_debug_level(void)
 {
-	return pd_dbg_level;
+	/* N17 code for HQHW-4815 by p-xuyechen at 2023/8/15 */
+	return PD_DEBUG_LEVEL;
 }
 
 static char *pd_state_to_str(int state)
@@ -372,6 +373,8 @@ int __mtk_pdc_setup(struct chg_alg_device *alg, int idx)
 	unsigned int oldmA = 3000000;
 	bool force_update = false;
 	int chg_cnt, is_chip_enabled, i;
+	struct chg_alg_device *pe5;
+	int pe5_state = ALG_INIT_FAIL;
 
 	struct mtk_pd *pd = dev_get_drvdata(&alg->dev);
 
@@ -427,8 +430,17 @@ int __mtk_pdc_setup(struct chg_alg_device *alg, int idx)
 			pd_hal_set_input_current(alg, CHG1,
 				pd->cap.ma[idx] * 1000);
 
-		ret = pd_hal_set_adapter_cap(alg, pd->cap.max_mv[idx],
-			pd->cap.ma[idx]);
+		/* gold: leave the adapter alone while PE5 can drive it */
+		pe5 = get_chg_alg_by_name("pe5");
+		if (pe5)
+			pe5_state = chg_alg_is_algo_ready(pe5);
+		else
+			pd_err("[%s] get pe5 fail\n", __func__);
+		if (pe5_state == ALG_READY || pe5_state == ALG_RUNNING)
+			ret = 0;
+		else
+			ret = pd_hal_set_adapter_cap(alg, pd->cap.max_mv[idx],
+				pd->cap.ma[idx]);
 
 		if (ret == 0) {
 #ifdef FIXME
@@ -534,6 +546,8 @@ int __mtk_pdc_get_setting(struct chg_alg_device *alg, int *newvbus, int *newcur,
 	bool chg1_mivr = false;
 	bool chg2_mivr = false;
 	int chg_cnt, i, is_chip_enabled;
+	/* N17 code for HQHW-4815 by p-xuyechen at 2023/8/15 */
+	int temp_index = -1;
 
 	__mtk_pdc_init_table(alg);
 	__mtk_pdc_get_reset_idx(alg);
@@ -628,18 +642,33 @@ int __mtk_pdc_get_setting(struct chg_alg_device *alg, int *newvbus, int *newcur,
 		chg2_watt,
 		now_max_watt);
 
+	/* N17 code for HQHW-4815 by p-xuyechen at 2023/8/15 start */
 	pd_min_watt = cap->max_mv[pd->pd_buck_idx] * cap->ma[pd->pd_buck_idx]
 			/ 100 * (100 - pd->ibus_err)
-			- pd->vsys_watt;
+			- pd->vsys_watt - 1500000;
 
-	pd_dbg("pd_min_watt:%d %d %d %d %d\n", pd->pd_buck_idx,
+	pd_dbg("vsys_watt:%d %d %d %d %d\n", pd->pd_buck_idx,
 		cap->max_mv[pd->pd_buck_idx],
 		cap->ma[pd->pd_buck_idx],
 		pd->ibus_err,
 		pd->vsys_watt);
+	/* N17 code for HQHW-4815 by p-xuyechen at 2023/8/15 end */
 
 	if (pd_min_watt <= 5000000)
 		pd_min_watt = 5000000;
+
+	/* N17 code for HQHW-4815 by p-xuyechen at 2023/8/15 start */
+	if (cap->max_mv[idx] == 5000) {
+		for (temp_index = 0; temp_index < cap->nr; temp_index++) {
+			if (cap->max_mv[temp_index] == 9000) {
+				pd_info("get 9V cap, index = %d\n", temp_index);
+				break;
+			}
+		}
+		if (temp_index == cap->nr)
+			pd_info("TA dont suppoert 9V!\n");
+	}
+	/* N17 code for HQHW-4815 by p-xuyechen at 2023/8/15 end */
 
 	if ((now_max_watt >= pd_max_watt) || chg1_mivr || chg2_mivr) {
 		*newidx = pd->pd_boost_idx;
@@ -647,6 +676,11 @@ int __mtk_pdc_get_setting(struct chg_alg_device *alg, int *newvbus, int *newcur,
 	} else if (now_max_watt <= pd_min_watt) {
 		*newidx = pd->pd_buck_idx;
 		buck = true;
+	/* N17 code for HQHW-4815 by p-xuyechen at 2023/8/15 start */
+	} else if ((cap->max_mv[idx] == 5000) && (temp_index < cap->nr) && (temp_index > -1)) {
+		*newidx = temp_index;
+		boost = true;
+	/* N17 code for HQHW-4815 by p-xuyechen at 2023/8/15 end */
 	} else {
 		*newidx = selected_idx;
 		boost = false;
@@ -1099,6 +1133,8 @@ static int pd_full_evt(struct chg_alg_device *alg)
 			if (pd->state == PD_RUN) {
 				pd_err("%s evt full\n",  __func__);
 				pd->state = PD_HW_READY;
+				/* N17 code for HQHW-4815 by p-xuyechen at 2023/8/15 */
+				pd_hal_set_adapter_cap(alg, 5000, 3000);
 			}
 		}
 		break;
@@ -1168,6 +1204,12 @@ static int _pd_notifier_call(struct chg_alg_device *alg,
 		pd->pd_6pin_en = 0;
 		ret_value = 0;
 		break;
+	/* N17 code for HQHW-4815 by p-xuyechen at 2023/8/15 start */
+	case EVT_PLUG_IN:
+		pd->state = PD_HW_READY;
+		pd_info("%s evt: EVT_PLUG_IN, reset pd state to PD_HW_READY\n", __func__);
+		fallthrough;
+	/* N17 code for HQHW-4815 by p-xuyechen at 2023/8/15 end */
 	default:
 		ret_value = -EINVAL;
 	}
@@ -1418,7 +1460,7 @@ static int mtk_pd_probe(struct platform_device *pdev)
 	mutex_init(&pd->access_lock);
 	mutex_init(&pd->data_lock);
 	mtk_pd_parse_dt(pd, &pdev->dev);
-	pd->bat_psy = devm_power_supply_get_by_phandle(&pdev->dev, "gauge");
+	pd->bat_psy = power_supply_get_by_name("battery");
 	if (IS_ERR_OR_NULL(pd->bat_psy))
 		pd_err("%s: devm power fail to get bat_psy\n", __func__);
 
