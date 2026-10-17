@@ -180,9 +180,14 @@ static int mtk_usb_extcon_psy_init(struct mtk_extcon_info *extcon)
 		goto fail;
 	}
 
-	extcon->usb_psy = devm_power_supply_get_by_phandle(dev, "usb");
+	/*
+	 * The charger's power supply, as stock gold's module takes it: it
+	 * reports the detected port type and tells when it changes. Huaqin's
+	 * "usb" one does neither.
+	 */
+	extcon->usb_psy = devm_power_supply_get_by_phandle(dev, "charger");
 	if (IS_ERR_OR_NULL(extcon->usb_psy)) {
-		extcon->usb_psy = power_supply_get_by_name("usb");
+		extcon->usb_psy = power_supply_get_by_name("primary_chg");
 		if (IS_ERR_OR_NULL(extcon->usb_psy)) {
 			dev_err(dev, "fail to get usb_psy\n");
 			extcon->usb_psy = NULL;
@@ -388,7 +393,6 @@ fail:
 }
 
 #if IS_ENABLED(CONFIG_TCPC_CLASS) || IS_ENABLED(CONFIG_SOUTHCHIP_TCPC_CLASS)
-extern void msleep(unsigned int msecs);
 static int mtk_extcon_tcpc_notifier(struct notifier_block *nb,
 		unsigned long event, void *data)
 {
@@ -434,7 +438,6 @@ static int mtk_extcon_tcpc_notifier(struct notifier_block *nb,
 	case TCP_NOTIFY_DR_SWAP:
 		dev_info(dev, "%s dr_swap, new role=%d\n",
 				__func__, noti->swap_state.new_role);
-		DelayforSwap:
 		if (noti->swap_state.new_role == PD_ROLE_UFP &&
 				extcon->c_role != USB_ROLE_DEVICE) {
 			dev_info(dev, "switch role to device\n");
@@ -444,10 +447,8 @@ static int mtk_extcon_tcpc_notifier(struct notifier_block *nb,
 			dev_info(dev, "switch role to host\n");
 			mtk_usb_extcon_set_role(extcon, USB_ROLE_HOST);
 		} else {
-			dev_err(dev, "Delay for swap...\n");
-			msleep(500); 
-			goto DelayforSwap;
-        }
+			dev_info(dev, "wrong condition\n");
+		}
 
 		break;
 	}
@@ -688,14 +689,15 @@ static int mtk_usb_extcon_probe(struct platform_device *pdev)
 	int ret;
 
 	/*
-	 * The usb power supply comes up after this driver on gold (Huaqin's
-	 * charger nodes register it). Wait for it before anything is set up:
-	 * a later deferral would leave the nodes, the workqueue and the role
-	 * switch of this try behind.
+	 * The charger's power supply may come up after this driver. Wait for
+	 * it before anything is set up: a later deferral would leave the
+	 * nodes, the workqueue and the role switch of this try behind.
 	 */
 	if (of_property_read_bool(dev->of_node, "charger")) {
-		usb_psy = power_supply_get_by_name("usb");
-		if (!usb_psy)
+		usb_psy = power_supply_get_by_phandle(dev->of_node, "charger");
+		if (IS_ERR_OR_NULL(usb_psy))
+			usb_psy = power_supply_get_by_name("primary_chg");
+		if (IS_ERR_OR_NULL(usb_psy))
 			return -EPROBE_DEFER;
 		power_supply_put(usb_psy);
 	}
