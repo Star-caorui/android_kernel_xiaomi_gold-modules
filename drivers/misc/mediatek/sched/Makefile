@@ -44,3 +44,6 @@ subdir-ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/power_throttl
 obj-$(CONFIG_MTK_CORE_CTL) += mtk_core_ctl.o
 mtk_core_ctl-y += core_ctl/sched_avg.o
 mtk_core_ctl-y += core_ctl/core_ctl.o
+
+obj-$(CONFIG_MTK_BINDER_PRIO) += binder_prio/
+binder_prio-y += binder_prio/binder_prio.o

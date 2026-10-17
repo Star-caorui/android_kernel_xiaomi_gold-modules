@@ -175,3 +175,10 @@ config MTK_ORIGIN_CHANGE
 	  Such as wait for ACK merge or debug purpose.
 	  When original code backport to MTK branch,
 	  than the config is not need.
+
+config MTK_BINDER_PRIO
+	tristate "MediaTek Binder Priority Booster"
+	depends on ANDROID_BINDER_IPC
+	help
+	  Choose this option to enable binder transaction priority boosting
+	  for SurfaceFlinger and critical UI threads on MediaTek platforms.

@@ -1,0 +1,3 @@
+obj-m += binder_prio.o
+binder_prio-y := binder_prio.o
+ccflags-y += -I$(srctree)/drivers/android
