@@ -749,5 +749,20 @@ void KD_IMGSENSOR_PROFILE_I2C(char *tag, int trans_num);
 #define SC202CS_SUNNY2_DEPTH_SENSOR_ID          0xEB56
 #define SC202PCS_AAC_MACRO_SENSOR_ID            0xEB54
 #define SC202PCS_SUNNY_MACRO_SENSOR_ID          0xEB55
+#define SENSOR_DRVNAME_S5KHM6_SEMCO_MAIN_MIPI_RAW   "s5khm6_semco_main_mipi_raw"
+#define SENSOR_DRVNAME_S5KHM6_AAC_MAIN_MIPI_RAW     "s5khm6_aac_main_mipi_raw"
+#define SENSOR_DRVNAME_OV64B40_OFILM_MAIN_MIPI_RAW  "ov64b40_ofilm_main_mipi_raw"
+#define SENSOR_DRVNAME_OV50D40_SUNNY_MAIN_MIPI_RAW  "ov50d40_sunny_main_mipi_raw"
+#define SENSOR_DRVNAME_OV16A1Q_AAC_FRONT_MIPI_RAW   "ov16a1q_aac_front_mipi_raw"
+#define SENSOR_DRVNAME_OV16A1Q_SUNNY_FRONT_MIPI_RAW "ov16a1q_sunny_front_mipi_raw"
+#define SENSOR_DRVNAME_GC16B3_AAC_FRONT_MIPI_RAW    "gc16b3_aac_front_mipi_raw"
+#define SENSOR_DRVNAME_GC16B3_SUNNY_FRONT_MIPI_RAW  "gc16b3_sunny_front_mipi_raw"
+#define SENSOR_DRVNAME_OV08D10_AAC_ULTRA_MIPI_RAW   "ov08d10_aac_ultra_mipi_raw"
+#define SENSOR_DRVNAME_OV08D10_SUNNY_ULTRA_MIPI_RAW "ov08d10_sunny_ultra_mipi_raw"
+#define SENSOR_DRVNAME_SC202CS_AAC_DEPTH_MIPI_RAW   "sc202cs_aac_depth_mipi_raw"
+#define SENSOR_DRVNAME_SC202CS_SUNNY_DEPTH_MIPI_RAW "sc202cs_sunny_depth_mipi_raw"
+#define SENSOR_DRVNAME_SC202CS_SUNNY2_DEPTH_MIPI_RAW "sc202cs_sunny2_depth_mipi_raw"
+#define SENSOR_DRVNAME_SC202PCS_AAC_MACRO_MIPI_RAW  "sc202pcs_aac_macro_mipi_raw"
+#define SENSOR_DRVNAME_SC202PCS_SUNNY_MACRO_MIPI_RAW "sc202pcs_sunny_macro_mipi_raw"
 
 #endif              /* _KD_IMGSENSOR_H */
