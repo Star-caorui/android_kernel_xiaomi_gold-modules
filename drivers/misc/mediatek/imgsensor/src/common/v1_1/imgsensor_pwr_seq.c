@@ -102,6 +102,33 @@ struct IMGSENSOR_HW_POWER_SEQ sensor_power_sequence[] = {
 	},
 #endif
 /* N17 code for HQ-293326 by zhaoyue end*/
+/* gold's GC16B3 front cameras, as in stock's module */
+#if defined(GC16B3_AAC_FRONT_MIPI_RAW)
+	{
+		SENSOR_DRVNAME_GC16B3_AAC_FRONT_MIPI_RAW,
+		{
+			{RST, Vol_Low, 1},
+			{DOVDD, Vol_1800, 1},
+			{DVDD, Vol_1200, 1},
+			{AVDD, Vol_2800, 0},
+			{SensorMCLK, Vol_High, 1},
+			{RST, Vol_High, 8}
+		},
+	},
+#endif
+#if defined(GC16B3_SUNNY_FRONT_MIPI_RAW)
+	{
+		SENSOR_DRVNAME_GC16B3_SUNNY_FRONT_MIPI_RAW,
+		{
+			{RST, Vol_Low, 1},
+			{DOVDD, Vol_1800, 1},
+			{DVDD, Vol_1200, 1},
+			{AVDD, Vol_2800, 0},
+			{SensorMCLK, Vol_High, 1},
+			{RST, Vol_High, 8}
+		},
+	},
+#endif
 /* N17 code for HQ-293327 by changqi start*/
 #if defined(OV08D10_AAC_ULTRA_MIPI_RAW)
 	{
