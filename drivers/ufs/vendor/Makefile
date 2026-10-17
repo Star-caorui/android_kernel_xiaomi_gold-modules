@@ -7,6 +7,7 @@ ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/ufs/
 ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/ufs/vendor/
 
 # must after -I$(DEVICE_MODULES_PATH)/drivers/ufs/
+ccflags-y += -I$(srctree)	# the UFS core's sources, see ../ufs-core.h
 ccflags-y += -I$(srctree)/drivers/ufs/
 ccflags-y += -I$(srctree)/drivers/ufs/core/
 ccflags-y += -I$(srctree)/drivers/ufs/host/
@@ -19,6 +20,11 @@ else
 ufs-mediatek-mod-y                              += ../ufs-mediatek.o ../ufs-mediatek-sysfs.o ../ufs-mediatek-mimic.o ../ufs-mediatek-mbrain.o
 endif
 
+# the kernel's UFS core, see ../ufs-core.h
+ufs-mediatek-mod-y                              += ../ufs-core.o ../ufs-core-sysfs.o ../ufs-core-mcq.o ../ufs-core-pltfrm.o
+ufs-mediatek-mod-$(CONFIG_DEBUG_FS)             += ../ufs-core-debugfs.o
+ufs-mediatek-mod-$(CONFIG_SCSI_UFS_BSG)         += ../ufs-core-bsg.o
+ufs-mediatek-mod-$(CONFIG_SCSI_UFS_CRYPTO)      += ../ufs-core-crypto.o
 ufs-mediatek-mod-$(CONFIG_MTK_BLOCK_IO_TRACER)  += ../ufs-mediatek-btag.o
 ufs-mediatek-mod-$(CONFIG_RPMB)                 += ../ufs-mediatek-rpmb.o
 ufs-mediatek-mod-$(CONFIG_RPMB)                 += ../ufs-mediatek-ise-dummy.o
@@ -37,6 +43,11 @@ else
 ufs-mediatek-mod-ise-y                              += ../ufs-mediatek.o ../ufs-mediatek-sysfs.o ../ufs-mediatek-mimic.o ../ufs-mediatek-mbrain.o
 endif
 
+# the kernel's UFS core, see ../ufs-core.h
+ufs-mediatek-mod-ise-y                              += ../ufs-core.o ../ufs-core-sysfs.o ../ufs-core-mcq.o ../ufs-core-pltfrm.o
+ufs-mediatek-mod-ise-$(CONFIG_DEBUG_FS)             += ../ufs-core-debugfs.o
+ufs-mediatek-mod-ise-$(CONFIG_SCSI_UFS_BSG)         += ../ufs-core-bsg.o
+ufs-mediatek-mod-ise-$(CONFIG_SCSI_UFS_CRYPTO)      += ../ufs-core-crypto.o
 ufs-mediatek-mod-ise-$(CONFIG_MTK_BLOCK_IO_TRACER)  += ../ufs-mediatek-btag.o
 ufs-mediatek-mod-ise-$(CONFIG_RPMB)                 += ../ufs-mediatek-rpmb.o
 ufs-mediatek-mod-ise-$(CONFIG_RPMB)                 += ../ufs-mediatek-ise.o

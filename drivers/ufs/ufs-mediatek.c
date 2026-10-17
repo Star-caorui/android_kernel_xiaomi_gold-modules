@@ -3464,9 +3464,34 @@ static struct platform_driver ufs_mtk_pltform = {
 	},
 };
 
+/* The UFS core built into this module (see ufs-core.h) starts first */
+int ufs_mtk_core_init(void);
+void ufs_mtk_core_exit(void);
+
+static int __init ufs_mtk_module_init(void)
+{
+	int ret;
+
+	ret = ufs_mtk_core_init();
+	if (ret)
+		return ret;
+
+	ret = platform_driver_register(&ufs_mtk_pltform);
+	if (ret)
+		ufs_mtk_core_exit();
+
+	return ret;
+}
+module_init(ufs_mtk_module_init);
+
+static void __exit ufs_mtk_module_exit(void)
+{
+	platform_driver_unregister(&ufs_mtk_pltform);
+	ufs_mtk_core_exit();
+}
+module_exit(ufs_mtk_module_exit);
+
 MODULE_AUTHOR("Stanley Chu <stanley.chu@mediatek.com>");
 MODULE_AUTHOR("Peter Wang <peter.wang@mediatek.com>");
 MODULE_DESCRIPTION("MediaTek UFS Host Driver");
 MODULE_LICENSE("GPL v2");
-
-module_platform_driver(ufs_mtk_pltform);
