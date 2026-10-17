@@ -112,6 +112,8 @@ obj-y += drivers/switch/
 
 obj-y += drivers/misc/perf_helper/
 
+obj-y += drivers/staging/binder_prio/
+
 obj-y += sound/soc/codecs/
 
 obj-y += sound/soc/mediatek/

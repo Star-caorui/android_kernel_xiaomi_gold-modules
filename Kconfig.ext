@@ -112,6 +112,8 @@ source "$(KCONFIG_EXT_PREFIX)drivers/switch/Kconfig"
 
 source "$(KCONFIG_EXT_PREFIX)drivers/misc/perf_helper/Kconfig"
 
+source "$(KCONFIG_EXT_PREFIX)drivers/staging/binder_prio/Kconfig"
+
 source "$(KCONFIG_EXT_PREFIX)sound/soc/codecs/Kconfig"
 
 source "$(KCONFIG_EXT_PREFIX)sound/soc/mediatek/Kconfig"
