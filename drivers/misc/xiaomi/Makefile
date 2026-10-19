@@ -5,4 +5,6 @@
 
 obj-$(CONFIG_MIEV) += miev/
 
+obj-$(CONFIG_MI_MEMORY_SYSFS) += mi_memory/
+
 # END Performance_UnfairMem
