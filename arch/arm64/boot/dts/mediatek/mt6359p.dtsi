@@ -328,6 +328,7 @@
 				regulator-min-microvolt = <2500000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-enable-ramp-delay = <240>;
+				regulator-always-on;
 			};
 
 			mt6359p_vcn33_2_bt_reg: ldo-vcn33-2-bt {

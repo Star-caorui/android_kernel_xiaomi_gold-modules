@@ -58,7 +58,7 @@
 	/* chosen */
 	chosen: chosen {
 		bootargs = "console=tty0 root=/dev/ram \
-			8250.nr_uarts=4 \
+			8250.nr_uarts=4 restrict_cma_redirect \
 			rcupdate.rcu_expedited=1 \
 			vmalloc=400M swiotlb=noforce \
 			firmware_class.path=/vendor/firmware \
@@ -489,6 +489,7 @@
 			reusable;
 			size = <0 0x10000000>;
 			alignment = <0 0x1000000>;
+			alloc-ranges = <0 0x40000000 0 0x80000000>;
 		};
 
 		wifi_mem: wifi-reserve-memory {
@@ -510,7 +511,7 @@
 		reserve-memory-scp_share {  /* TODO: remove after lk2 ready */
 			compatible = "mediatek,reserve-memory-scp_share";
 			no-map;
-			size = <0 0x003A0000>; /*3MB + 128K share mem size */
+			size = <0 0x00420000>; /*3MB + 128K share mem size */
 			alignment = <0 0x1000000>;
 			alloc-ranges = <0 0x50000000 0 0x40000000>;
 		};
@@ -557,9 +558,9 @@
 	memory_ssmr_features: memory-ssmr-features {
 		compatible = "mediatek,memory-ssmr-features";
 		svp-region-based-size = <0 0x10000000>;
-		tui-size = <0 0x4000000>;
-		wfd-region-based-size = <0 0x4000000>;
-		prot-region-based-size = <0 0x8000000>;
+		tui-size = <0 0x0>;
+		wfd-region-based-size = <0 0x0>;
+		prot-region-based-size = <0 0x0>;
 	};
 
 	ssmr {
@@ -1080,11 +1081,13 @@
 			clocks = <&infracfg_ao_clk CLK_IFRAO_GCE>,
 				 <&infracfg_ao_clk CLK_IFRAO_GCE_26M>;
 			clock-names = "gce", "gce-timer";
+			skip-poll-sleep;
 		};
 
 		gce_sec: gce_mbox_sec@10228000 {
 			compatible = "mediatek,mailbox-gce-sec";
 			reg = <0 0x10228000 0 0x4000>;
+			mtee-supply = <&mtee>;
 			#mbox-cells = <3>;
 			mboxes = <&gce 15 CMDQ_NO_TIMEOUT CMDQ_THR_PRIO_1>;
 			clocks = <&infracfg_ao_clk CLK_IFRAO_GCE>;
@@ -3882,7 +3885,7 @@
 		/* feature ID, size, alignment */
 		scp-mem-tbl =
 		< 0 0x0      0x0>,      /* secure dump, its size is in secure_dump_size */
-		< 1 0x4E300  0x0>,  /* vow, 297KB (2 model size)*/
+		< 1 0xCA700  0x0>,  /* vow, 297KB (2 model size)*/
 		< 2 0x100000 0x0>, /* ensor main, 1 MB */
 		< 3 0x180000 0x0>, /* logger, 1.5 MB */
 		< 4 0x19000  0x0>,  /* audio, 100 KB */
@@ -5233,6 +5236,10 @@ gpufreq: gpufreq {
 	};
 
 	pmic_clock_buffer_ctrl:pmic_clock_buffer_ctrl {
+		pmic-supply = <&mt6359p_clkbuf>;
+		compatible = "mediatek,mt6833-clkbuf";
+		pmic = <&mt6359p_clkbuf>;
+		pmif = <&pwrap 0>;
 	};
 
 	mrdump_ext_rst: mrdump_ext_rst {
@@ -6990,8 +6997,8 @@ gpufreq: gpufreq {
 			mt_pmic_vfp_ldo_reg: LDO1 {
 				regulator-compatible = "LDO1";
 				regulator-name = "mt6360,ldo1";
-				regulator-min-microvolt = <1200000>;
-				regulator-max-microvolt = <3600000>;
+				regulator-min-microvolt = <3300000>;
+				regulator-max-microvolt = <3300000>;
 				regulator-allowed-modes =
 					<MT6360_OPMODE_NORMAL
 					 MT6360_OPMODE_LP>;
@@ -7215,10 +7222,10 @@ grpid = <11>;
 		};
 		mt6315_3_regulator: mt6315_3_regulator {
 			compatible = "mediatek,mt6315_3-regulator";
-			buck-size = <3>;
+			buck-size = <4>;
 			buck1-modeset-mask = <0x3>;
 
-			mt6315_3_vbuck1: 3_vbuck1 {
+			mt6315_3_vbuck1: 3-vbuck1 {
 				regulator-compatible = "vbuck1";
 				regulator-name = "3_vbuck1";
 				regulator-min-microvolt = <300000>;
@@ -7228,17 +7235,17 @@ grpid = <11>;
 				regulator-always-on;
 			};
 
-			mt6315_3_vbuck3: 3_vbuck3 {
+			mt6315_3_vbuck3: 3-vbuck3 {
 				regulator-compatible = "vbuck3";
 				regulator-name = "3_vbuck3";
-				regulator-min-microvolt = <300000>;
+				regulator-min-microvolt = <1193750>;
 				regulator-max-microvolt = <1193750>;
 				regulator-enable-ramp-delay = <256>;
 				regulator-allowed-modes = <0 1 2>;
 				regulator-always-on;
 			};
 
-			mt6315_3_vbuck4: 3_vbuck4 {
+			mt6315_3_vbuck4: 3-vbuck4 {
 				regulator-compatible = "vbuck4";
 				regulator-name = "3_vbuck4";
 				regulator-min-microvolt = <300000>;
