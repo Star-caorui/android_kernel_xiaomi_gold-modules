@@ -5,4 +5,10 @@ if ARM || ARM64
 source "$(KCONFIG_EXT_PREFIX)drivers/cpufreq/Kconfig.arm"
 endif
 
+config MI_CPU_MAX_FREQ
+	tristate "Xiaomi cpu max frequency value"
+	default n
+	help
+	  Say 'm' here to support MI CPU MAX FREQ detection
+
 endmenu
