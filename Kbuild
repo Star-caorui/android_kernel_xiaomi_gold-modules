@@ -104,6 +104,8 @@ obj-y += drivers/misc/mediatek/
 
 obj-y += drivers/misc/xiaomi/
 
+obj-y += drivers/misc/hqsysfs/
+
 obj-y += drivers/misc/hq_notifier/
 
 obj-y += drivers/misc/hq_kallsyms/
