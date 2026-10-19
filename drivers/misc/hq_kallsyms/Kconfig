@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-2.0
+
+config HQ_KALLSYMS
+	tristate "Huaqin's kallsyms lookup for modules"
+	depends on KPROBES
+	help
+	  Looks kernel symbols up for other modules (gold's audio machine
+	  drivers), with the kallsyms_lookup_name() a kprobe finds.

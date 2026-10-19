@@ -104,6 +104,8 @@ source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/Kconfig"
 
 source "$(KCONFIG_EXT_PREFIX)drivers/misc/xiaomi/Kconfig"
 
+source "$(KCONFIG_EXT_PREFIX)drivers/misc/hq_kallsyms/Kconfig"
+
 source "$(KCONFIG_EXT_PREFIX)drivers/misc/perf_helper/Kconfig"
 
 source "$(KCONFIG_EXT_PREFIX)drivers/staging/binder_prio/Kconfig"
