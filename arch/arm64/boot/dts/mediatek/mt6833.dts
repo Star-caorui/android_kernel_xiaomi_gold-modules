@@ -63,8 +63,7 @@
 			vmalloc=400M swiotlb=noforce \
 			firmware_class.path=/vendor/firmware \
 			androidboot.hardware=mt6833 \
-			transparent_hugepage=never \
-			initcall_debug=1";
+			transparent_hugepage=never";
 		kaslr-seed = <0 0>;
 	};
 
