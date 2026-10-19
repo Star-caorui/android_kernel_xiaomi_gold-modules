@@ -86,9 +86,10 @@ struct mtk_nanohub_device {
 
 	int32_t acc_config_data[6];
 	int32_t gyro_config_data[12];
-	int32_t mag_config_data[9];
-	int32_t light_config_data[1];
-	int32_t proximity_config_data[2];
+	int32_t mag_config_data[10];
+	int32_t light_config_data[5];
+	int32_t light_config_data_cali[5];
+	int32_t proximity_config_data[6];
 	int32_t pressure_config_data[2];
 	int32_t sar_config_data[4];
 	int32_t ois_config_data[2];
@@ -111,6 +112,9 @@ static DEFINE_SPINLOCK(config_data_lock);
 static uint8_t scp_system_ready;
 static uint8_t scp_chre_ready;
 static struct mtk_nanohub_device *mtk_nanohub_dev;
+/*N17 code for HQ-297564 by wangshizhen at 2023/06/12 start*/
+static bool pre_fusion_any_on = false;
+/*N17 code for HQ-297564 by wangshizhen at 2023/06/12 end*/
 
 static int mtk_nanohub_send_timestamp_to_hub(void);
 static int mtk_nanohub_server_dispatch_data(uint32_t *currWp);
@@ -124,6 +128,7 @@ static inline uint64_t arch_counter_to_ns(uint64_t cyc)
 #define ARCH_TIMER_SHIFT 21
 	return (cyc * ARCH_TIMER_MULT) >> ARCH_TIMER_SHIFT;
 }
+
 
 #define FILTER_DATAPOINTS	16
 #define FILTER_TIMEOUT		10000000000ULL /* 10 seconds, ~100us drift */
@@ -179,6 +184,7 @@ static uint64_t get_filter_output(struct moving_average *filter)
 {
 	return atomic64_read(&filter->output);
 }
+
 
 struct mtk_nanohub_cmd {
 	uint32_t reason;
@@ -240,6 +246,7 @@ static int mtk_nanohub_fetch_next_wp(uint32_t *currWp)
 	return have_event;
 }
 
+
 static int mtk_nanohub_read_wp_queue(void)
 {
 	uint32_t currWp = 0;
@@ -266,6 +273,7 @@ static void mtk_nanohub_sync_time_func(struct timer_list *list)
 	mod_timer(&device->sync_time_timer,
 		jiffies +  msecs_to_jiffies(SYNC_TIME_CYCLC));
 }
+
 
 static int mtk_nanohub_direct_push_work(void *data)
 {
@@ -304,6 +312,7 @@ static void mtk_nanohub_moving_average(union SCP_SENSOR_HUB_DATA *rsp)
 	scp_now_time = scp_raw_time + ipi_transfer_time;
 	moving_average_filter(&moving_average_algo, ap_now_time, scp_now_time);
 }
+
 
 static void mtk_nanohub_notify_cmd(union SCP_SENSOR_HUB_DATA *rsp,
 		unsigned int rx_len)
@@ -387,6 +396,7 @@ static void mtk_nanohub_ipi_handler(int id,
 		pr_err("IPI_SENSOR cannot find cmd!\n");
 }
 
+
 static void mtk_nanohub_get_sensor_info(void)
 {
 	int i = 0, j = 0, k = 0;
@@ -453,6 +463,51 @@ static void mtk_nanohub_init_sensor_info(void)
 	p->gain = 1;
 	strlcpy(p->name, "light", sizeof(p->name));
 	strlcpy(p->vendor, "mtk", sizeof(p->vendor));
+
+	p = &sensor_state[SENSOR_TYPE_SAR_ALGO];
+	p->sensorType = SENSOR_TYPE_SAR_ALGO;
+	p->rate = SENSOR_RATE_ONCHANGE;
+	p->gain = 1;
+	strlcpy(p->name, "sar_algo", sizeof(p->name));
+	strlcpy(p->vendor, "xiaomi", sizeof(p->vendor));
+
+	p = &sensor_state[SENSOR_TYPE_SAR_ALGO_1];
+	p->sensorType = SENSOR_TYPE_SAR_ALGO_1;
+	p->rate = SENSOR_RATE_ONCHANGE;
+	p->gain = 1;
+	strlcpy(p->name, "sar_algo_1", sizeof(p->name));
+	strlcpy(p->vendor, "xiaomi", sizeof(p->vendor));
+
+	p = &sensor_state[SENSOR_TYPE_SAR_ALGO_2];
+	p->sensorType = SENSOR_TYPE_SAR_ALGO_2;
+	p->rate = SENSOR_RATE_ONCHANGE;
+	p->gain = 1;
+	strlcpy(p->name, "sar_algo_2", sizeof(p->name));
+	strlcpy(p->vendor, "xiaomi", sizeof(p->vendor));
+
+	p = &sensor_state[SENSOR_TYPE_AOD];
+	p->sensorType = SENSOR_TYPE_AOD;
+	p->gain = 1;
+	strlcpy(p->name, "aod", sizeof(p->name));
+	strlcpy(p->vendor, "xiaomi", sizeof(p->vendor));
+
+	p = &sensor_state[SENSOR_TYPE_PS_FACTORY_STRM];
+	p->sensorType = SENSOR_TYPE_PS_FACTORY_STRM;
+	p->gain = 1;
+	strlcpy(p->name, "prox_factory_strm", sizeof(p->name));
+	strlcpy(p->vendor, "xiaomi", sizeof(p->vendor));
+
+	p = &sensor_state[SENSOR_TYPE_ALS_FACTORY_STRM];
+	p->sensorType = SENSOR_TYPE_ALS_FACTORY_STRM;
+	p->gain = 1;
+	strlcpy(p->name, "als_factory_str", sizeof(p->name));
+	strlcpy(p->vendor, "xiaomi", sizeof(p->vendor));
+
+	p = &sensor_state[SENSOR_TYPE_FRONT_CCT_FACTORY_STRM];
+	p->sensorType = SENSOR_TYPE_FRONT_CCT_FACTORY_STRM;
+	p->gain = 1;
+	strlcpy(p->name, "cct_factory_str", sizeof(p->name));
+	strlcpy(p->vendor, "xiaomi", sizeof(p->vendor));
 
 	p = &sensor_state[SENSOR_TYPE_PROXIMITY];
 	p->sensorType = SENSOR_TYPE_PROXIMITY;
@@ -539,10 +594,10 @@ static void mtk_nanohub_init_sensor_info(void)
 
 	p = &sensor_state[SENSOR_TYPE_PICK_UP_GESTURE];
 	p->sensorType = SENSOR_TYPE_PICK_UP_GESTURE;
-	p->rate = SENSOR_RATE_ONESHOT;
+	p->rate = SENSOR_RATE_ONCHANGE;
 	p->gain = 1;
 	strlcpy(p->name, "pickup", sizeof(p->name));
-	strlcpy(p->vendor, "mtk", sizeof(p->vendor));
+	strlcpy(p->vendor, "xiaomi", sizeof(p->vendor));
 
 	p = &sensor_state[SENSOR_TYPE_WAKE_GESTURE];
 	p->sensorType = SENSOR_TYPE_WAKE_GESTURE;
@@ -581,7 +636,6 @@ static void mtk_nanohub_init_sensor_info(void)
 
 	p = &sensor_state[SENSOR_TYPE_SAR];
 	p->sensorType = SENSOR_TYPE_SAR;
-	p->rate = SENSOR_RATE_ONCHANGE;
 	p->gain = 1;
 	strlcpy(p->name, "sar", sizeof(p->name));
 	strlcpy(p->vendor, "mtk", sizeof(p->vendor));
@@ -591,8 +645,8 @@ static void mtk_nanohub_init_sensor_info(void)
 	p->gain = 1000000;
 	strlcpy(p->name, "ois", sizeof(p->name));
 	strlcpy(p->vendor, "mtk", sizeof(p->vendor));
-
 }
+
 
 static void init_sensor_config_cmd(struct ConfigCmd *cmd,
 		int sensor_type)
@@ -747,6 +801,7 @@ static int mtk_nanohub_server_dispatch_data(uint32_t *currWp)
 	return 0;
 }
 
+
 static int mtk_nanohub_send_dram_info_to_hub(void)
 {
 	struct mtk_nanohub_device *device = mtk_nanohub_dev;
@@ -821,6 +876,7 @@ static int mtk_nanohub_send_timestamp_wake_locked(void)
 	return err;
 }
 
+
 static int mtk_nanohub_send_timestamp_to_hub(void)
 {
 	int err = 0;
@@ -864,6 +920,51 @@ static void mtk_nanohub_disable_report_flush(uint8_t sensor_id)
 	mutex_unlock(&flush_mtx);
 }
 
+/*N17 code for HQ-297564 by wangshizhen at 2023/06/12 start*/
+static bool mtk_nanohub_check_is_fusion_type(int sensor_type)
+{
+	switch (sensor_type) {
+	case SENSOR_TYPE_ORIENTATION:
+	case SENSOR_TYPE_GRAVITY:
+	case SENSOR_TYPE_LINEAR_ACCELERATION:
+	case SENSOR_TYPE_ROTATION_VECTOR:
+	case SENSOR_TYPE_GAME_ROTATION_VECTOR:
+	case SENSOR_TYPE_GEOMAGNETIC_ROTATION_VECTOR:
+	case SENSOR_TYPE_PROXIMITY:
+		return true;
+	default:
+		return false;
+	}
+	return false;
+}
+static void mtk_nanohub_fusion_adjust_freq(bool any_on)
+{
+	if (any_on) {
+		pr_info("register fusion feature\n");
+		scp_register_feature(FUSION_FEATURE_ID);
+	} else {
+		pr_info("deregister fusion feature\n");
+		scp_deregister_feature(FUSION_FEATURE_ID);
+	}
+}
+static void mtk_nanohub_check_fusion_state(int sensor_type)
+{
+	bool fusion_any_on = false;
+	if (!mtk_nanohub_check_is_fusion_type(sensor_type))
+		return;
+	fusion_any_on |= sensor_state[SENSOR_TYPE_ORIENTATION].enable;
+	fusion_any_on |= sensor_state[SENSOR_TYPE_GRAVITY].enable;
+	fusion_any_on |= sensor_state[SENSOR_TYPE_LINEAR_ACCELERATION].enable;
+	fusion_any_on |= sensor_state[SENSOR_TYPE_ROTATION_VECTOR].enable;
+	fusion_any_on |= sensor_state[SENSOR_TYPE_GAME_ROTATION_VECTOR].enable;
+	fusion_any_on |= sensor_state[SENSOR_TYPE_GEOMAGNETIC_ROTATION_VECTOR].enable;
+	fusion_any_on |= sensor_state[SENSOR_TYPE_PROXIMITY].enable;
+	if (pre_fusion_any_on != fusion_any_on) {
+		mtk_nanohub_fusion_adjust_freq(fusion_any_on);
+		pre_fusion_any_on = fusion_any_on;
+	}
+}
+/*N17 code for HQ-297564 by wangshizhen at 2023/06/12 end*/
 int mtk_nanohub_enable_to_hub(uint8_t sensor_id, int enabledisable)
 {
 	uint8_t sensor_type = id_to_type(sensor_id);
@@ -884,6 +985,7 @@ int mtk_nanohub_enable_to_hub(uint8_t sensor_id, int enabledisable)
 		return -1;
 	}
 	sensor_state[sensor_type].enable = enabledisable;
+	mtk_nanohub_check_fusion_state(sensor_type);
 	init_sensor_config_cmd(&cmd, sensor_type);
 	if (atomic_read(&power_status) == SENSOR_POWER_UP) {
 		ret = nanohub_external_write((const uint8_t *)&cmd,
@@ -896,6 +998,7 @@ int mtk_nanohub_enable_to_hub(uint8_t sensor_id, int enabledisable)
 	mutex_unlock(&sensor_state_mtx);
 	return ret < 0 ? ret : 0;
 }
+
 
 int mtk_nanohub_batch_to_hub(uint8_t sensor_id,
 		int flag, int64_t samplingPeriodNs,
@@ -1003,6 +1106,7 @@ int mtk_nanohub_cfg_to_hub(uint8_t sensor_id, uint8_t *data, uint8_t count)
 	vfree(cmd);
 	return ret < 0 ? ret : 0;
 }
+
 
 int mtk_nanohub_calibration_to_hub(uint8_t sensor_id)
 {
@@ -1142,6 +1246,7 @@ int mtk_nanohub_get_data_from_hub(uint8_t sensor_id,
 	}
 	return err;
 }
+
 
 int mtk_nanohub_set_cmd_to_hub(uint8_t sensor_id,
 		enum CUST_ACTION action, void *data)
@@ -1603,6 +1708,7 @@ static void mtk_nanohub_get_devinfo(void)
 	}
 }
 
+
 static void mtk_nanohub_restoring_config(void)
 {
 	int length = 0;
@@ -1867,7 +1973,7 @@ static int mtk_nanohub_calibration(struct hf_device *hfdev,
 {
 	if (sensor_type <= 0)
 		return 0;
-	pr_notice("%s [%d]\n", __func__, sensor_type);
+	//pr_notice("%s [%d]\n", __func__, sensor_type);
 	return mtk_nanohub_calibration_to_hub(type_to_id(sensor_type));
 }
 
@@ -1879,7 +1985,7 @@ static int mtk_nanohub_config(struct hf_device *hfdev,
 	if (sensor_type <= 0)
 		return 0;
 
-	pr_notice("%s [%d]\n", __func__, sensor_type);
+	//pr_notice("%s [%d]\n", __func__, sensor_type);
 	switch (type_to_id(sensor_type)) {
 	case ID_ACCELEROMETER:
 		if (sizeof(device->acc_config_data) < length)
@@ -1907,6 +2013,10 @@ static int mtk_nanohub_config(struct hf_device *hfdev,
 			length = sizeof(device->light_config_data);
 		spin_lock(&config_data_lock);
 		memcpy(device->light_config_data, data, length);
+		/* 103 marks the calibration result, kept to be read back */
+		if (device->light_config_data[0] == 103)
+			memcpy(device->light_config_data_cali,
+				device->light_config_data, length);
 		spin_unlock(&config_data_lock);
 		break;
 	case ID_PROXIMITY:
@@ -2010,12 +2120,15 @@ static int mtk_nanohub_custom_cmd(struct hf_device *hfdev,
 			break;
 		case SENSOR_TYPE_LIGHT:
 			if (sizeof(cust_cmd->data) <
-					sizeof(device->light_config_data))
+					sizeof(device->light_config_data_cali))
 				return -EINVAL;
-			cust_cmd->rx_len = sizeof(device->light_config_data);
+			cust_cmd->rx_len = sizeof(device->light_config_data_cali);
 			spin_lock(&config_data_lock);
-			memcpy(cust_cmd->data, device->light_config_data,
-					sizeof(device->light_config_data));
+			cust_cmd->data[0] = device->light_config_data_cali[1];
+			cust_cmd->data[1] = device->light_config_data_cali[2];
+			cust_cmd->data[2] = device->light_config_data_cali[3];
+			cust_cmd->data[3] = device->light_config_data_cali[4];
+			cust_cmd->data[4] = 1000;
 			spin_unlock(&config_data_lock);
 			break;
 		case SENSOR_TYPE_PROXIMITY:
@@ -2198,9 +2311,14 @@ static int mtk_nanohub_report_to_manager(struct data_unit_t *data)
 			event.timestamp = data->time_stamp;
 			event.sensor_type = id_to_type(data->sensor_type);
 			event.action = data->flush_action;
-			event.word[0] = data->sar_event.data[0];
-			event.word[1] = data->sar_event.data[1];
-			event.word[2] = data->sar_event.data[2];
+			event.word[0] = data->data[0];
+			event.word[1] = data->data[1];
+			event.word[2] = data->data[2];
+			event.word[3] = data->data[3];
+			event.word[4] = data->data[4];
+			event.word[5] = data->data[5];
+			event.word[6] = data->data[6];
+			event.word[7] = data->data[7];
 			break;
 		default:
 			event.timestamp = data->time_stamp;
@@ -2212,6 +2330,8 @@ static int mtk_nanohub_report_to_manager(struct data_unit_t *data)
 			event.word[3] = data->data[3];
 			event.word[4] = data->data[4];
 			event.word[5] = data->data[5];
+			event.word[6] = data->data[6];
+			event.word[7] = data->data[7];
 			break;
 		}
 	} else if (data->flush_action == FLUSH_ACTION) {
@@ -2288,12 +2408,20 @@ static int mtk_nanohub_report_to_manager(struct data_unit_t *data)
 			event.action = data->flush_action;
 			event.word[0] = data->data[0];
 			event.word[1] = data->data[1];
+			event.word[2] = data->data[2];
+			event.word[3] = data->data[3];
+			event.word[4] = data->data[4];
+			event.word[5] = data->data[5];
 			break;
 		case ID_LIGHT:
 			event.timestamp = data->time_stamp;
 			event.sensor_type = id_to_type(data->sensor_type);
 			event.action = data->flush_action;
 			event.word[0] = data->data[0];
+			event.word[1] = data->data[1];
+			event.word[2] = data->data[2];
+			event.word[3] = data->data[3];
+			event.word[4] = data->data[4];
 			break;
 		case ID_PRESSURE:
 			event.timestamp = data->time_stamp;
@@ -2306,9 +2434,9 @@ static int mtk_nanohub_report_to_manager(struct data_unit_t *data)
 			event.timestamp = data->time_stamp;
 			event.sensor_type = id_to_type(data->sensor_type);
 			event.action = data->flush_action;
-			event.word[0] = data->sar_event.x_bias;
-			event.word[1] = data->sar_event.y_bias;
-			event.word[2] = data->sar_event.z_bias;
+			event.word[0] = data->data[0];
+			event.word[1] = data->data[1];
+			event.word[2] = data->data[2];
 			break;
 		case ID_OIS:
 			event.timestamp = data->time_stamp;
@@ -2317,6 +2445,12 @@ static int mtk_nanohub_report_to_manager(struct data_unit_t *data)
 			event.word[0] = data->data[0];
 			event.word[1] = data->data[1];
 			event.word[2] = data->data[2];
+			break;
+		case ID_SAR_ALGO:
+			event.timestamp = data->time_stamp;
+			event.sensor_type = id_to_type(data->sensor_type);
+			event.action = data->flush_action;
+			event.word[0] = data->data[0];
 			break;
 		}
 	} else if (data->flush_action == TEMP_ACTION) {
