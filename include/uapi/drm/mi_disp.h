@@ -1,27 +1,33 @@
-// SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note
+/* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2020, The Linux Foundation. All rights reserved.
  */
+
 #ifndef _MI_DISP_H_
 #define _MI_DISP_H_
+
 #ifndef __KERNEL__
 #define __KERNEL__
 #endif
+
 #include <linux/types.h>
 #include <asm/ioctl.h>
-#include <linux/string.h>
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
+
 enum disp_display_type {
 	MI_DISP_PRIMARY = 0,
 	MI_DISP_SECONDARY = 1,
 	MI_DISP_MAX,
 };
+
 enum common_feature_state {
 	FEATURE_OFF = 0,
 	FEATURE_ON  = 1,
 };
+
 /* supported feature ids */
 enum disp_feature_id {
 	DISP_FEATURE_DIMMING = 0,
@@ -59,9 +65,16 @@ enum disp_feature_id {
 	DISP_FEATURE_GAMUT = 32,
 	DISP_FEATURE_COLORMODE_NOTIFY = 33,
 	DISP_FEATURE_DOLBY_STATUS = 34,
-    DISP_FEATURE_HBM_OFF = 35,
+	DISP_FEATURE_FULLSCREEN_AOD_STATUS = 35,
+	DISP_FEATURE_APL_DIMMING = 36,
+	DISP_FEATURE_REPAINT_STATUS = 37,
+	DISP_FEATURE_VIDLE = 38,
+	DISP_FEATURE_LAYER_HAS_AOD = 39,
+	DISP_FEATURE_EARLY_SCREEN_STATUS = 40,
+	DISP_FEATURE_DYNAMIC_ELVSS_LEVEL = 41,
 	DISP_FEATURE_MAX,
 };
+
 /* feature_id: DISP_FEATURE_LOCAL_HBM corresponding feature_val */
 enum local_hbm_state {
 	LOCAL_HBM_OFF_TO_NORMAL = 0,
@@ -78,6 +91,7 @@ enum local_hbm_state {
 	LOCAL_HBM_OFF_TO_NORMAL_BACKLIGHT_RESTORE = 11,
 	LOCAL_HBM_MAX,
 };
+
 /* feature_id: DISP_FEATURE_FP_STATUS corresponding feature_val */
 enum fingerprint_status {
 	FINGERPRINT_NONE = 0,
@@ -88,11 +102,13 @@ enum fingerprint_status {
 	HEART_RATE_START = 5,
 	HEART_RATE_STOP = 6,
 };
+
 /* feature_id: DISP_FEATURE_SPR_RENDER corresponding feature_val */
 enum spr_render_status {
 	SPR_1D_RENDERING = 1,
 	SPR_2D_RENDERING = 2,
 };
+
 /* feature_id: DISP_FEATURE_LCD_HBM corresponding feature_val */
 enum lcd_hbm_level {
 	LCD_HBM_OFF   = 0,
@@ -101,6 +117,7 @@ enum lcd_hbm_level {
 	LCD_HBM_L3_ON = 3,
 	LCD_HBM_MAX,
 };
+
 /* feature_id: DISP_FEATURE_CRC corresponding feature_val */
 enum crc_mode {
 	CRC_OFF      = 0,
@@ -111,12 +128,14 @@ enum crc_mode {
 	CRC_SRGB_D65 = 5,
 	CRC_MODE_MAX,
 };
+
 /* feature_id: DISP_FEATURE_GIR corresponding feature_val */
 enum gir_mode {
 	GIR_OFF = 0,
 	GIR_ON  = 1,
 	GIR_MODE_MAX,
 };
+
 /* feature_id: DISP_FEATURE_CABC corresponding feature_val */
 enum cabc_status {
 	LCD_CABC_OFF = 0,
@@ -124,15 +143,27 @@ enum cabc_status {
 	LCD_CABC_MOVIE_ON = 2,
 	LCD_CABC_STILL_ON = 3,
 };
+
+/* feature_id: DISP_FEATURE_COLORMODE_NOTIFY feature_val */
+enum display_color_mode_id {
+	COLOR_MODE_STANDARD = 0,
+	COLOR_MODE_ACNORMAL = 1,
+	COLOR_MODE_CONTRAST = 2,
+	COLOR_MODE_EXPERT_NATURE = 3,
+	COLOR_MODE_EXPERT_OTHERS = 4,
+};
+
 struct disp_base {
 	__u32 flag;
 	__u32 disp_id;
 };
+
 /* IOCTL: MI_DISP_IOCTL_VERSION parameter */
 struct disp_version {
 	struct disp_base base;
 	__u32 version;
 };
+
 /* IOCTL: MI_DISP_IOCTL_SET_FEATURE parameter */
 struct disp_feature_req {
 	struct disp_base base;
@@ -143,6 +174,7 @@ struct disp_feature_req {
 	__u32 rx_len;
 	__u64 rx_ptr;
 };
+
 /**
  * enum doze_brightness_state - set doze brightness state
  * @DOZE_TO_NORMAL     : doze mode to normal mode
@@ -156,6 +188,7 @@ enum doze_brightness_state {
 	DOZE_BRIGHTNESS_LBM = 2,
 	DOZE_BRIGHTNESS_MAX,
 };
+
 /* IOCTL:
  * MI_DISP_IOCTL_SET_DOZE_BRIGHTNESS parameter
  * MI_DISP_IOCTL_GET_DOZE_BRIGHTNESS parameter
@@ -164,6 +197,7 @@ struct disp_doze_brightness_req {
 	struct disp_base base;
 	__u32 doze_brightness;
 };
+
 /* local_hbm_value value */
 enum lhbm_target_brightness_state {
 	LHBM_TARGET_BRIGHTNESS_OFF_FINGER_UP = 0,
@@ -173,11 +207,21 @@ enum lhbm_target_brightness_state {
 	LHBM_TARGET_BRIGHTNESS_GREEN_500NIT  = 4,
 	LHBM_TARGET_BRIGHTNESS_MAX
 };
+
+/* fp unlock status */
+enum fingerprint_unlock_state {
+	FINGERPRINT_UP = 0,
+	FINGERPRINT_DOWN = 1,
+	FINGERPRINT_UNLOCK_SUCCESS = 2,
+	FINGERPRINT_UNLOCK_FAIL = 3,
+};
+
 /* IOCTL: MI_DISP_IOCTL_SET_LOCAL_HBM parameter */
 struct disp_local_hbm_req {
 	struct disp_base base;
 	__u32 local_hbm_value;
 };
+
 /* IOCTL:
  * MI_DISP_IOCTL_GET_BRIGHTNESS parameter
  * MI_DISP_IOCTL_SET_BRIGHTNESS parameter
@@ -187,18 +231,27 @@ struct disp_brightness_req {
 	__u32 brightness;
 	__u32 brightness_clone;
 };
+
+/* IOCTL: MI_DISP_IOCTL_SET_FP_UNLOCK_STATE parameter */
+struct disp_fingerprint_unlock_state {
+	struct disp_base base;
+	__u32 fp_unlock_value;
+};
+
 /* IOCTL: MI_DISP_IOCTL_GET_PANEL_INFO parameter */
 struct disp_panel_info {
 	struct disp_base base;
 	__u32 info_len;
 	char *info;
 };
+
 /* IOCTL: MI_DISP_IOCTL_GET_WP_INFO parameter */
 struct disp_wp_info {
 	struct disp_base base;
 	__u32 info_len;
 	char *info;
 };
+
 /* IOCTL: MI_DISP_IOCTL_GET_MANUFACTURER_INFO parameter */
 struct disp_manufacturer_info_req {
 	struct disp_base base;
@@ -209,11 +262,13 @@ struct disp_manufacturer_info_req {
 	__u32 max_brightness_len;
 	__u32 manufacturer_time_len;
 };
+
 /* IOCTL: MI_DISP_IOCTL_GET_FPS parameter */
 struct disp_fps_info {
 	struct disp_base base;
 	__u32 fps;
 };
+
 enum disp_event_type {
 	MI_DISP_EVENT_POWER = 0,
 	MI_DISP_EVENT_BACKLIGHT = 1,
@@ -227,8 +282,10 @@ enum disp_event_type {
 	MI_DISP_EVENT_PANEL_DEAD = 9,
 	MI_DISP_EVENT_PANEL_EVENT = 10,
 	MI_DISP_EVENT_DDIC_RESOLUTION = 11,
+	MI_DISP_EVENT_FLAT_MODE = 12,
 	MI_DISP_EVENT_MAX,
 };
+
 /* IOCTL:
  * MI_DISP_IOCTL_REGISTER_EVENT parameter
  * MI_DISP_IOCTL_DEREGISTER_EVENT parameter
@@ -237,15 +294,18 @@ struct disp_event_req {
 	struct disp_base base;
 	__u32 type;
 };
+
 struct disp_event {
 	__s32 disp_id;
 	__u32 type;
 	__u32 length;
 };
+
 struct disp_event_resp {
 	struct disp_event base;
 	__u8 data[];
 };
+
 /* Define supported power modes */
 enum panel_power_state {
 	MI_DISP_POWER_ON         = 0,
@@ -255,6 +315,7 @@ enum panel_power_state {
 	MI_DISP_POWER_SUSPEND   = 4,
 	MI_DISP_POWER_OFF        = 5,
 };
+
 /**
  * enum disp_dsi_cmd_state - command set state
  * @MI_DSI_CMD_LP_STATE:   dsi low power mode
@@ -266,6 +327,7 @@ enum disp_dsi_cmd_state {
 	MI_DSI_CMD_HS_STATE = 1,
 	MI_DSI_CMD_MAX_STATE,
 };
+
 /* IOCTL:
  * MI_DISP_IOCTL_WRITE_DSI_CMD parameter
  * MI_DISP_IOCTL_READ_DSI_CMD parameter
@@ -276,6 +338,29 @@ struct disp_dsi_cmd_req {
 	__u32 tx_len;
 	__u64 tx_ptr;
 	__u8  rx_state;
+	__u32 rx_len;
+	__u64 rx_ptr;
+};
+
+/* supported count info ids */
+enum disp_count_info_type {
+	DISP_COUNT_INFO_POWERSTATUS = 0,
+	DISP_COUNT_INFO_SYSTEM_BUILD_VERSION = 1,
+	DISP_COUNT_INFO_FRAME_DROP_COUNT = 2,
+	DISP_COUNT_INFO_SWITCH_KERNEL_FUNCTION_TIMER = 3,
+	DISP_COUNT_INFO_TPIDLE_COUNT = 4,
+	DISP_COUNT_INFO_TRUE_TONE_STATE = 5,
+	DISP_COUNT_INFO_DBI_AGING_COUNT = 6,
+	DISP_COUNT_INFO_MAX,
+};
+
+/* IOCTL: MI_DISP_IOCTL_SET_COUNT_INFO parameter */
+struct disp_count_info_req {
+	struct disp_base base;
+	__u32 count_info_type;
+	__s32 count_info_val;
+	__u32 tx_len;
+	__u64 tx_ptr;
 	__u32 rx_len;
 	__u64 rx_ptr;
 };
@@ -303,49 +388,35 @@ static inline const char *get_disp_id_name(__u32 disp_id)
 
 static inline int is_support_doze_brightness(__u32 doze_brightness)
 {
-    if (DOZE_TO_NORMAL <= doze_brightness && doze_brightness < DOZE_BRIGHTNESS_MAX)
-        return 1;
-    else
-        return 0;
-	
+	if (doze_brightness < DOZE_BRIGHTNESS_MAX)
+		return 1;
+	else
+		return 0;
 }
-/*
-static inline int is_support_lcd_hbm_level(__u32 doze_brightness)
-{
-    if (LCD_HBM_OFF <= doze_brightness && doze_brightness < LCD_HBM_MAX)
-        return 1;
-    else
-        return 0;
-}
-*/
+
 static inline int is_aod_brightness(__u32 doze_brightness)
 {
-    if (DOZE_BRIGHTNESS_HBM == doze_brightness ||
-        doze_brightness == DOZE_BRIGHTNESS_LBM)
-        return 1;
-    else
-        return 0;
-}
-static inline int mi_get_disp_id(const char *type)
-{
-	if (!strncmp(type, "primary", 7))
-		return MI_DISP_PRIMARY;
+	if (DOZE_BRIGHTNESS_HBM == doze_brightness ||
+		doze_brightness == DOZE_BRIGHTNESS_LBM)
+		return 1;
 	else
-		return MI_DISP_SECONDARY;
+		return 0;
 }
+
 static inline const char *get_doze_brightness_name(__u32 doze_brightness)
 {
-    switch (doze_brightness) {
-    case DOZE_TO_NORMAL:
-        return "doze_to_normal";
-    case DOZE_BRIGHTNESS_HBM:
-        return "doze_brightness_high";
-    case DOZE_BRIGHTNESS_LBM:
-        return "doze_brightness_low";
-    default:
-        return "Unknown";
-    }
+	switch (doze_brightness) {
+	case DOZE_TO_NORMAL:
+		return "doze_to_normal";
+	case DOZE_BRIGHTNESS_HBM:
+		return "doze_brightness_high";
+	case DOZE_BRIGHTNESS_LBM:
+		return "doze_brightness_low";
+	default:
+		return "Unknown";
+	}
 }
+
 static inline int is_support_lcd_hbm_level(__u32 lcd_hbm_level)
 {
 	if (lcd_hbm_level < LCD_HBM_MAX)
@@ -353,6 +424,7 @@ static inline int is_support_lcd_hbm_level(__u32 lcd_hbm_level)
 	else
 		return 0;
 }
+
 static inline int is_support_disp_event_type(__u32 event_type)
 {
 	if (event_type < MI_DISP_EVENT_MAX)
@@ -388,10 +460,13 @@ static inline const char *get_disp_event_type_name(__u32 event_type)
 		return "panel_event";
 	case MI_DISP_EVENT_DDIC_RESOLUTION:
 		return "ddic_resolution";
+	case MI_DISP_EVENT_FLAT_MODE:
+		return "flat_mode";
 	default:
 		return "Unknown";
 	}
 }
+
 static inline int is_support_disp_feature_id(__u32 feature_id)
 {
 	if (feature_id < DISP_FEATURE_MAX)
@@ -399,6 +474,7 @@ static inline int is_support_disp_feature_id(__u32 feature_id)
 	else
 		return 0;
 }
+
 static inline const char *get_local_hbm_state_name(int state)
 {
 	switch (state) {
@@ -430,6 +506,7 @@ static inline const char *get_local_hbm_state_name(int state)
 		return "Unknown";
 	}
 }
+
 static inline const char *get_fingerprint_status_name(int status)
 {
 	switch (status) {
@@ -451,6 +528,7 @@ static inline const char *get_fingerprint_status_name(int status)
 		return "Unknown";
 	}
 }
+
 static inline const char *get_disp_feature_id_name(__u32 feature_id)
 {
 	switch (feature_id) {
@@ -520,10 +598,29 @@ static inline const char *get_disp_feature_id_name(__u32 feature_id)
 		return "round_mode";
 	case DISP_FEATURE_GAMUT:
 		return "gamut";
+	case DISP_FEATURE_COLORMODE_NOTIFY:
+		return "colormode_notify";
+	case DISP_FEATURE_DOLBY_STATUS:
+		return "dolby_status";
+	case DISP_FEATURE_FULLSCREEN_AOD_STATUS:
+		return "fullscreen_aod_status";
+	case DISP_FEATURE_APL_DIMMING:
+		return "apl_dimming";
+	case DISP_FEATURE_REPAINT_STATUS:
+		return "repaint status";
+	case DISP_FEATURE_VIDLE:
+		return "vidle";
+	case DISP_FEATURE_LAYER_HAS_AOD:
+		return "layer_has_aod";
+	case DISP_FEATURE_EARLY_SCREEN_STATUS:
+		return "early_screen_status";
+	case DISP_FEATURE_DYNAMIC_ELVSS_LEVEL:
+		return "dynamic_elvss";
 	default:
 		return "Unknown";
 	}
 }
+
 static inline const char *get_lhbm_value_name(__u32 lhbm_value)
 {
 	switch (lhbm_value) {
@@ -541,6 +638,32 @@ static inline const char *get_lhbm_value_name(__u32 lhbm_value)
 		return "Unknown";
 	}
 }
+
+static inline int is_support_disp_count_info_type(__u32 count_info_type)
+{
+	if (count_info_type < DISP_COUNT_INFO_MAX)
+		return 1;
+	else
+		return 0;
+}
+
+static inline const char *get_disp_count_info_type_name(__u32 count_info_type)
+{
+	switch (count_info_type) {
+	case DISP_COUNT_INFO_POWERSTATUS:
+		return "power_status";
+	case DISP_COUNT_INFO_SYSTEM_BUILD_VERSION:
+		return "system_build_version";
+	case DISP_COUNT_INFO_FRAME_DROP_COUNT:
+		return "frame_drop_count";
+	case DISP_COUNT_INFO_SWITCH_KERNEL_FUNCTION_TIMER:
+		return "swith_function_timer";
+	case DISP_COUNT_INFO_DBI_AGING_COUNT:
+		return "dbi_aging_count";
+	default:
+		return "Unknown count info type";
+	}
+}
 #else
 static inline int isSupportDispId(__u32 disp_id)
 {
@@ -549,6 +672,7 @@ static inline int isSupportDispId(__u32 disp_id)
 	else
 		return 0;
 }
+
 static inline const char *getDispIdName(__u32 disp_id)
 {
 	switch (disp_id) {
@@ -560,6 +684,7 @@ static inline const char *getDispIdName(__u32 disp_id)
 		return "Unknown";
 	}
 }
+
 static inline int isSupportDozeBrightness(__u32 doze_brightness)
 {
 	if (doze_brightness < DOZE_BRIGHTNESS_MAX)
@@ -567,6 +692,7 @@ static inline int isSupportDozeBrightness(__u32 doze_brightness)
 	else
 		return 0;
 }
+
 static inline int isAodBrightness(__u32 doze_brightness)
 {
 	if (DOZE_BRIGHTNESS_HBM == doze_brightness ||
@@ -575,6 +701,7 @@ static inline int isAodBrightness(__u32 doze_brightness)
 	else
 		return 0;
 }
+
 static inline const char *getDozeBrightnessName(__u32 doze_brightness)
 {
 	switch (doze_brightness) {
@@ -588,6 +715,7 @@ static inline const char *getDozeBrightnessName(__u32 doze_brightness)
 		return "Unknown";
 	}
 }
+
 static inline int isSupportLcdHbmLevel(__u32 lcd_hbm_level)
 {
 	if (lcd_hbm_level < LCD_HBM_MAX)
@@ -595,6 +723,7 @@ static inline int isSupportLcdHbmLevel(__u32 lcd_hbm_level)
 	else
 		return 0;
 }
+
 static inline int isSupportDispEventType(__u32 event_type)
 {
 	if (event_type < MI_DISP_EVENT_MAX)
@@ -602,6 +731,7 @@ static inline int isSupportDispEventType(__u32 event_type)
 	else
 		return 0;
 }
+
 static inline const char *getDispEventTypeName(__u32 event_type)
 {
 	switch (event_type) {
@@ -629,10 +759,13 @@ static inline const char *getDispEventTypeName(__u32 event_type)
 		return "panel_event";
 	case MI_DISP_EVENT_DDIC_RESOLUTION:
 		return "ddic_resolution";
+	case MI_DISP_EVENT_FLAT_MODE:
+		return "flat_mode";
 	default:
 		return "Unknown";
 	}
 }
+
 static inline int isSupportDispFeatureId(__u32 feature_id)
 {
 	if (feature_id < DISP_FEATURE_MAX)
@@ -640,6 +773,7 @@ static inline int isSupportDispFeatureId(__u32 feature_id)
 	else
 		return 0;
 }
+
 static inline const char *getLocalHbmStateName(int state)
 {
 	switch (state) {
@@ -671,6 +805,7 @@ static inline const char *getLocalHbmStateName(int state)
 		return "Unknown";
 	}
 }
+
 static inline const char *getFingerprintStatusName(int status)
 {
 	switch (status) {
@@ -692,6 +827,7 @@ static inline const char *getFingerprintStatusName(int status)
 		return "Unknown";
 	}
 }
+
 static inline const char *getDispFeatureIdName(__u32 feature_id)
 {
 	switch (feature_id) {
@@ -761,10 +897,29 @@ static inline const char *getDispFeatureIdName(__u32 feature_id)
 		return "round_mode";
 	case DISP_FEATURE_GAMUT:
 		return "gamut";
+	case DISP_FEATURE_COLORMODE_NOTIFY:
+		return "colormode_notify";
+	case DISP_FEATURE_DOLBY_STATUS:
+		return "dolby_status";
+	case DISP_FEATURE_FULLSCREEN_AOD_STATUS:
+		return "fullscreen_aod_status";
+	case DISP_FEATURE_APL_DIMMING:
+		return "apl_dimming";
+	case DISP_FEATURE_REPAINT_STATUS:
+		return "repaint status";
+	case DISP_FEATURE_VIDLE:
+		return "vidle";
+	case DISP_FEATURE_LAYER_HAS_AOD:
+		return "layer_has_aod";
+	case DISP_FEATURE_EARLY_SCREEN_STATUS:
+		return "early_screen_status";
+	case DISP_FEATURE_DYNAMIC_ELVSS_LEVEL:
+		return "dynamic_elvss";
 	default:
 		return "Unknown";
 	}
 }
+
 static inline const char *getLhbmValueName(__u32 lhbm_value)
 {
 	switch (lhbm_value) {
@@ -782,13 +937,43 @@ static inline const char *getLhbmValueName(__u32 lhbm_value)
 		return "Unknown";
 	}
 }
+
+static inline int isSupportDispCountInfoType(__u32 count_info_type)
+{
+	if (count_info_type < DISP_COUNT_INFO_MAX)
+		return 1;
+	else
+		return 0;
+}
+
+static inline const char *getDispCountInfoTypeName(__u32 count_info_type)
+{
+	switch (count_info_type) {
+	case DISP_COUNT_INFO_POWERSTATUS:
+		return "power_status";
+	case DISP_COUNT_INFO_SYSTEM_BUILD_VERSION:
+		return "system_build_version";
+	case DISP_COUNT_INFO_FRAME_DROP_COUNT:
+		return "frame_drop_count";
+	case DISP_COUNT_INFO_SWITCH_KERNEL_FUNCTION_TIMER:
+		return "swith_function_timer";
+	case DISP_COUNT_INFO_DBI_AGING_COUNT:
+		return "dbi_aging_count";
+	default:
+		return "Unknown count info type";
+	}
+}
 #endif
+
+
 #define MI_DISP_FLAG_BLOCK     0x0000
 #define MI_DISP_FLAG_NONBLOCK  0x0001
+
 #define MI_DISP_FEATURE_VERSION_MAJOR 1
 #define MI_DISP_FEATURE_VERSION_MINOR 0
 #define MI_DISP_FEATURE_VERSION      (((MI_DISP_FEATURE_VERSION_MAJOR & 0xFF) << 8) | \
                                        (MI_DISP_FEATURE_VERSION_MINOR & 0xFF))
+
 #define MI_DISP_IOCTL_VERSION                  _IOR('D', 0x00, struct disp_version)
 #define MI_DISP_IOCTL_SET_FEATURE             _IOWR('D', 0x01, struct disp_feature_req)
 #define MI_DISP_IOCTL_SET_DOZE_BRIGHTNESS      _IOW('D', 0x02, struct disp_doze_brightness_req)
@@ -802,9 +987,11 @@ static inline const char *getLhbmValueName(__u32 lhbm_value)
 #define MI_DISP_IOCTL_READ_DSI_CMD            _IOWR('D', 0x0A, struct disp_dsi_cmd_req)
 #define MI_DISP_IOCTL_GET_BRIGHTNESS           _IOR('D', 0x0B, struct disp_brightness_req)
 #define MI_DISP_IOCTL_SET_BRIGHTNESS           _IOW('D', 0x0C, struct disp_brightness_req)
-#define MI_DISP_IOCTL_GET_MANUFACTURER_INFO   _IOWR('D', 0x0D, struct disp_manufacturer_info_req)
+#define MI_DISP_IOCTL_SET_COUNT_INFO          _IOWR('D', 0x0D, struct disp_count_info_req)
 #define MI_DISP_IOCTL_SET_LOCAL_HBM            _IOW('D', 0x0E, struct disp_local_hbm_req)
 #define MI_DISP_IOCTL_GET_FEATURE             _IOWR('D', 0x0F, struct disp_feature_req)
+#define MI_DISP_IOCTL_SET_FP_UNLOCK_STATE      _IOW('D', 0x10, struct disp_fingerprint_unlock_state)
+
 #if defined(__cplusplus)
 }
 #endif
