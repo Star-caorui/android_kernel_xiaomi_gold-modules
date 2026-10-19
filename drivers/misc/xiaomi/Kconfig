@@ -4,4 +4,5 @@
 #
 
 menu "Xiaomi Misc devices"
+source "$(KCONFIG_EXT_PREFIX)drivers/misc/xiaomi/miev/Kconfig"
 endmenu

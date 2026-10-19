@@ -3,4 +3,6 @@
 # Xiaomi for misc devices.
 #
 
+obj-$(CONFIG_MIEV) += miev/
+
 # END Performance_UnfairMem
