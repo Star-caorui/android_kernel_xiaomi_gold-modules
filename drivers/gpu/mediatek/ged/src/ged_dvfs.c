@@ -2598,7 +2598,8 @@ void set_api_sync_flag(int flag)
 	} else if (flag == 6) {
 		dcs_set_fix_num(2);
 		start_mewtwo_timer();
-	} else if (((flag & 0xFFFF0000) == 0x60000) || ((flag & 0xFFFF0000) == 0x70000)) {
+	} else if (((flag & 0xFFFF0000) == 0x60000) || ((flag & 0xFFFF0000) == 0x70000) ||
+		((flag & 0xFF000000) == 0x39000000)) {
 		if (api_sync_flag != flag)
 			api_sync_flag = flag;
 	} else if (flag == 8) {
@@ -2609,7 +2610,6 @@ void set_api_sync_flag(int flag)
 	} else if ((flag & 0xFFFF0000) == 0x55660000) {
 		// pre-throttle cases
 		if ((flag & 0x0000FFFF) == 0xFFFF) {
-			// reset default
 			//set_gpu_pre_throttle(0x27BC86AA);
 			//set_gpu_pre_throttle_opp(0x27BC86AA);
 		} else {
@@ -2624,9 +2624,6 @@ void set_api_sync_flag(int flag)
 			}
 		}
 		GED_LOGE("new gpu_pre_throttle temp");
-		//GED_LOGE("%s@%d (0x%08x)new gpu_pre_throttle temp: %d / opp: %d",
-		//	__func__, __LINE__, (flag & 0x0000FFFF),
-		//	get_gpu_pre_throttle_temp(), get_gpu_pre_throttle_opp());
 #endif
 	}
 }
