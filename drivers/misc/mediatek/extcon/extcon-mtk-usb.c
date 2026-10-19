@@ -25,8 +25,6 @@
 
 #if IS_ENABLED(CONFIG_TCPC_CLASS)
 #include "tcpm.h"
-#elif IS_ENABLED(CONFIG_SOUTHCHIP_TCPC_CLASS)
-#include "../typec/sc_tcpc/inc/tcpm.h"
 #endif
 
 static const unsigned int usb_extcon_cable[] = {
@@ -125,6 +123,7 @@ static bool usb_is_online(struct mtk_extcon_info *extcon)
 	}
 
 	dev_info(extcon->dev, "online=%d, type=%d\n", pval.intval, tval.intval);
+
 	if (pval.intval && (tval.intval == POWER_SUPPLY_TYPE_USB ||
 			tval.intval == POWER_SUPPLY_TYPE_USB_CDP))
 		return true;
@@ -139,7 +138,7 @@ static void mtk_usb_extcon_psy_detector(struct work_struct *work)
 
 	/* Workaround for PR_SWAP, IF tcpc_dev, then do not switch role. */
 	/* Since we will set USB to none when type-c plug out */
-	#if IS_ENABLED(CONFIG_TCPC_CLASS) || IS_ENABLED(CONFIG_SOUTHCHIP_TCPC_CLASS)
+	#if IS_ENABLED(CONFIG_TCPC_CLASS)
 	if (extcon->tcpc_dev) {
 		if (usb_is_online(extcon) && extcon->c_role == USB_ROLE_NONE)
 			mtk_usb_extcon_set_role(extcon, USB_ROLE_DEVICE);
@@ -149,7 +148,7 @@ static void mtk_usb_extcon_psy_detector(struct work_struct *work)
 			mtk_usb_extcon_set_role(extcon, USB_ROLE_DEVICE);
 		else
 			mtk_usb_extcon_set_role(extcon, USB_ROLE_NONE);
-#if IS_ENABLED(CONFIG_TCPC_CLASS) || IS_ENABLED(CONFIG_SOUTHCHIP_TCPC_CLASS)
+#if IS_ENABLED(CONFIG_TCPC_CLASS)
 	}
 #endif
 }
@@ -176,13 +175,13 @@ static int mtk_usb_extcon_psy_init(struct mtk_extcon_info *extcon)
 
 	if (!of_property_read_bool(dev->of_node, "charger")) {
 		ret = -EINVAL;
-		dev_err(dev,"mtk_usb_extcon_psy_init read dts failed goto fail \n");
 		goto fail;
 	}
 
-	extcon->usb_psy = devm_power_supply_get_by_phandle(dev, "usb");
+	extcon->usb_psy = devm_power_supply_get_by_phandle(dev, "charger");
 	if (IS_ERR_OR_NULL(extcon->usb_psy)) {
-		extcon->usb_psy = power_supply_get_by_name("usb");
+		/* try to get by name */
+		extcon->usb_psy = power_supply_get_by_name("primary_chg");
 		if (IS_ERR_OR_NULL(extcon->usb_psy)) {
 			dev_err(dev, "fail to get usb_psy\n");
 			extcon->usb_psy = NULL;
@@ -387,8 +386,7 @@ fail:
 	return ret;
 }
 
-#if IS_ENABLED(CONFIG_TCPC_CLASS) || IS_ENABLED(CONFIG_SOUTHCHIP_TCPC_CLASS)
-extern void msleep(unsigned int msecs);
+#if IS_ENABLED(CONFIG_TCPC_CLASS)
 static int mtk_extcon_tcpc_notifier(struct notifier_block *nb,
 		unsigned long event, void *data)
 {
@@ -434,7 +432,6 @@ static int mtk_extcon_tcpc_notifier(struct notifier_block *nb,
 	case TCP_NOTIFY_DR_SWAP:
 		dev_info(dev, "%s dr_swap, new role=%d\n",
 				__func__, noti->swap_state.new_role);
-		DelayforSwap:
 		if (noti->swap_state.new_role == PD_ROLE_UFP &&
 				extcon->c_role != USB_ROLE_DEVICE) {
 			dev_info(dev, "switch role to device\n");
@@ -443,11 +440,8 @@ static int mtk_extcon_tcpc_notifier(struct notifier_block *nb,
 				extcon->c_role != USB_ROLE_HOST) {
 			dev_info(dev, "switch role to host\n");
 			mtk_usb_extcon_set_role(extcon, USB_ROLE_HOST);
-		} else {
-			dev_err(dev, "Delay for swap...\n");
-			msleep(500); 
-			goto DelayforSwap;
-        }
+		} else
+			dev_info(dev, "wrong condition\n");
 
 		break;
 	}
@@ -601,7 +595,7 @@ static int mtk_usb_extcon_gpio_init(struct mtk_extcon_info *extcon)
 	return 0;
 }
 
-#if IS_ENABLED(CONFIG_TCPC_CLASS) || IS_ENABLED(CONFIG_SOUTHCHIP_TCPC_CLASS)
+#if IS_ENABLED(CONFIG_TCPC_CLASS)
 #define PROC_FILE_SMT "mtk_typec"
 #define FILE_SMT_U2_CC_MODE "smt_u2_cc_mode"
 
@@ -681,7 +675,7 @@ static int mtk_usb_extcon_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct mtk_extcon_info *extcon;
-#if IS_ENABLED(CONFIG_TCPC_CLASS) || IS_ENABLED(CONFIG_SOUTHCHIP_TCPC_CLASS)
+#if IS_ENABLED(CONFIG_TCPC_CLASS)
 	const char *tcpc_name;
 #endif
 	int ret;
@@ -725,7 +719,7 @@ static int mtk_usb_extcon_probe(struct platform_device *pdev)
 		of_property_read_bool(dev->of_node,
 			"mediatek,bypss-typec-sink");
 
-#if IS_ENABLED(CONFIG_TCPC_CLASS) || IS_ENABLED(CONFIG_SOUTHCHIP_TCPC_CLASS)
+#if IS_ENABLED(CONFIG_TCPC_CLASS)
 	ret = of_property_read_string(dev->of_node, "tcpc", &tcpc_name);
 	if (of_property_read_bool(dev->of_node, "mediatek,u2") && ret == 0
 		&& strcmp(tcpc_name, "type_c_port0") == 0) {
@@ -739,17 +733,15 @@ static int mtk_usb_extcon_probe(struct platform_device *pdev)
 
 	/* power psy */
 	ret = mtk_usb_extcon_psy_init(extcon);
-	if (ret < 0){
+	if (ret < 0)
 		dev_err(dev, "failed to init psy\n");
-		return -EPROBE_DEFER;
-	}
 
 	/* get id/vbus gpio resources */
 	ret = mtk_usb_extcon_gpio_init(extcon);
 	if (ret < 0)
 		dev_info(dev, "failed to init id/vbus pin\n");
 
-#if IS_ENABLED(CONFIG_TCPC_CLASS) || IS_ENABLED(CONFIG_SOUTHCHIP_TCPC_CLASS)
+#if IS_ENABLED(CONFIG_TCPC_CLASS)
 	/* tcpc */
 	ret = mtk_usb_extcon_tcpc_init(extcon);
 	if (ret < 0)
