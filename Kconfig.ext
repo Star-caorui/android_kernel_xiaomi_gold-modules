@@ -110,6 +110,8 @@ source "$(KCONFIG_EXT_PREFIX)drivers/misc/hq_notifier/Kconfig"
 
 source "$(KCONFIG_EXT_PREFIX)drivers/misc/hq_kallsyms/Kconfig"
 
+source "$(KCONFIG_EXT_PREFIX)drivers/switch/Kconfig"
+
 source "$(KCONFIG_EXT_PREFIX)drivers/misc/perf_helper/Kconfig"
 
 source "$(KCONFIG_EXT_PREFIX)drivers/staging/binder_prio/Kconfig"

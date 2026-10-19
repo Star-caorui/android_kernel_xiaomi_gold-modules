@@ -110,6 +110,8 @@ obj-y += drivers/misc/hq_notifier/
 
 obj-y += drivers/misc/hq_kallsyms/
 
+obj-y += drivers/switch/
+
 obj-y += drivers/misc/perf_helper/
 
 obj-y += drivers/staging/binder_prio/
