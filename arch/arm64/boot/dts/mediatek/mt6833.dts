@@ -2633,6 +2633,14 @@
 		#clock-cells = <1>;
 	};
 
+/* N17 code for HQ-291671 by yangjinhao at 2023/05/08 start */
+	irtx_pwm:irtx_pwm {
+			compatible = "mediatek,irtx-pwm";
+			pwm-ch = <1>;
+			pwm-data-invert = <0>;
+			//pwm-supply = "vio28";
+	};
+/* N17 code for HQ-291671 by yangjinhao at 2023/05/08 end */
 	atf_logger: atf_logger {
 		compatible = "mediatek,atf_logger";
 	};
@@ -3281,6 +3289,12 @@
 	md1_sim2_hot_plug_eint:MD1-SIM2-HOT-PLUG-EINT {
 	};
 
+/* N17 code for HQ-292079 by yangjinhao at 2023/04/25 start */
+	swtp: swtp {
+		compatible = "mediatek, swtp-eint";
+		swtp-gpio = <&pio 45 0>;
+	};
+/* N17 code for HQ-292079 by yangjinhao at 2023/04/25 end */
 	watchdog: watchdog@10007000 {
 		compatible = "mediatek,mt6833-wdt",
 				"mediatek,mt6589-wdt",
@@ -3381,7 +3395,8 @@
 	};
 
 	goodix_fp: fingerprint {
-		compatible = "mediatek,goodix-fp";
+		compatible = "mediatek,fpc1022_irq","mediatek,goodix-fp";
+		status = "okay";
 	};
 
 	emicen: emicen@10219000 {
@@ -4188,22 +4203,31 @@
 		clock-names = "therm-main";
 	};
 
-	tboard_thermistor1: thermal-sensor1 {
-		compatible = "mediatek,mtboard-thermistor1";
+	tboard_thermistor0: thermal-sensor0 {
+		compatible = "mediatek,mtboard-thermistor0";
 		io-channels = <&auxadc 0>;
 		io-channel-names = "thermistor-ch0";
 	};
 
-	tboard_thermistor2: thermal-sensor2 {
-		compatible = "mediatek,mtboard-thermistor2";
+	/* RF PA */
+	tboard_thermistor1: thermal-sensor1 {
+		compatible = "mediatek,mtboard-thermistor1";
 		io-channels = <&auxadc 1>;
 		io-channel-names = "thermistor-ch1";
 	};
 
-	tboard_thermistor3: thermal-sensor3 {
-		compatible = "mediatek,mtboard-thermistor3";
+	/* Chargerpump */
+	tboard_thermistor2: thermal-sensor2 {
+		compatible = "mediatek,mtboard-thermistor2";
 		io-channels = <&auxadc 2>;
 		io-channel-names = "thermistor-ch2";
+	};
+
+	/* main board-AP */
+	tboard_thermistor3: thermal-sensor3 {
+		compatible = "mediatek,mtboard-thermistor3";
+		io-channels = <&auxadc 3>;
+		io-channel-names = "thermistor-ch3";
 	};
 
 	thermal_ipi_legacy: thermal_ipi_legacy {
@@ -5225,8 +5249,8 @@ gpufreq: gpufreq {
 	regulator_vibrator: regulator-vibrator {
 		compatible = "regulator-vibrator";
 		label = "vibrator";
-		min-volt = <2800000>;
-		max-volt = <3500000>;
+		min-volt = <3000000>;
+		max-volt = <3000000>;
 		vib-supply = <&mt6359p_vibr_reg>;
 		};
 
@@ -5766,15 +5790,15 @@ gpufreq: gpufreq {
 	mt6382_nfc: mt6382_nfc {
 		compatible = "mediatek, mt6382_nfc-eint";
 		interrupt-parent = <&pio>;
-		interrupts = <25 IRQ_TYPE_EDGE_BOTH 25 0>;
-		mt6382_nfc_srclk = <&pio 25 0x0>;
+		interrupts = <81 IRQ_TYPE_EDGE_BOTH 81 0>;
+		mt6382_nfc_srclk = <&pio 81 0x0>;
 		status = "okay";
 	};
 
 	mt6382_eint: mt6382_eint {
 		compatible = "mediatek, mt6382_eint";
 		interrupt-parent = <&pio>;
-		interrupts = <5 IRQ_TYPE_LEVEL_HIGH 5 0>;
+		interrupts = <11 IRQ_TYPE_LEVEL_HIGH 11 0>;
 		status = "okay";
 	};
 
