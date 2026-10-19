@@ -78,6 +78,7 @@
 #include <linux/interconnect.h>
 #include "dvfsrc-exp.h"
 #endif
+
 #include "mtk_dsi.h"
 
 #include "mtk_drm_mmp.h"
@@ -126,6 +127,15 @@
 #define DRIVER_DATE "20150513"
 #define DRIVER_MAJOR 1
 #define DRIVER_MINOR 0
+
+#ifdef CONFIG_MI_DISP
+#include "mi_disp/mi_disp_feature.h"
+#endif
+
+/* raised from system suspend until resume completes, see mtk_drm_early_resume() */
+atomic_t resume_pending;
+wait_queue_head_t resume_wait_q;
+
 #define IDLE_FPS 10 /*when fps is less than or euqal to 10, hwc not sending hw vsync*/
 
 void disp_dbg_deinit(void);
@@ -148,6 +158,7 @@ long long mutex_time_period;
 const char *mutex_locker;
 
 int aod_scp_flag;
+
 unsigned long long mutex_nested_time_start;
 unsigned long long mutex_nested_time_end;
 long long mutex_nested_time_period;
@@ -447,6 +458,7 @@ static void mtk_atomic_wait_for_fences(struct drm_atomic_state *state)
 }
 
 #define UNIT 32768
+
 static void mtk_atomic_rsz_calc_dual_params(
 	struct drm_crtc *crtc, struct mtk_rect *src_roi,
 	struct mtk_rect *dst_roi,
@@ -2349,6 +2361,7 @@ static const enum mtk_ddp_comp_id mt6771_mtk_ddp_ext[] = {
 	DDP_COMPONENT_OVL1_2L, DDP_COMPONENT_RDMA1,
 	DDP_COMPONENT_RDMA1_VIRTUAL0,DDP_COMPONENT_DPI0,
 };
+
 static const enum mtk_ddp_comp_id mt6771_mtk_ddp_third[] = {
 	DDP_COMPONENT_OVL0_2L, DDP_COMPONENT_WDMA_VIRTUAL0,
 	DDP_COMPONENT_WDMA0,
@@ -2831,6 +2844,7 @@ static const enum mtk_ddp_comp_id mt6885_dual_data_ext[] = {
 	/*DDP_COMPONENT_MERGE1,*/
 	DDP_COMPONENT_DSC0,
 };
+
 static const enum mtk_ddp_comp_id mt6885_mtk_ddp_third[] = {
 	DDP_COMPONENT_OVL2_2L, DDP_COMPONENT_WDMA0,
 };
@@ -4105,6 +4119,10 @@ static const struct mtk_addon_module_data addon_dsc1_data[] = {
 	{DSC_1, ADDON_AFTER, DDP_COMPONENT_OVL0_2L},
 };
 
+static const struct mtk_addon_module_data mt6833_addon_wdma0_data_v2[] = {
+	{DISP_WDMA0, ADDON_AFTER, DDP_COMPONENT_OVL0_2L},
+};
+
 static const struct mtk_addon_scenario_data mt6779_addon_main[ADDON_SCN_NR] = {
 		[NONE] = {
 
@@ -5048,6 +5066,16 @@ static const struct mtk_addon_scenario_data mt6833_addon_main[ADDON_SCN_NR] = {
 		[TWO_SCALING] = {
 				.module_num = ARRAY_SIZE(addon_rsz_data),
 				.module_data = addon_rsz_data,
+				.hrt_type = HRT_TB_TYPE_GENERAL1,
+			},
+		[WDMA_WRITE_BACK] = {
+				.module_num = ARRAY_SIZE(addon_wdma0_data),
+				.module_data = addon_wdma0_data,
+				.hrt_type = HRT_TB_TYPE_GENERAL1,
+			},
+		[WDMA_WRITE_BACK_OVL] = {
+				.module_num = ARRAY_SIZE(mt6833_addon_wdma0_data_v2),
+				.module_data = mt6833_addon_wdma0_data_v2,
 				.hrt_type = HRT_TB_TYPE_GENERAL1,
 			},
 };
@@ -7750,7 +7778,7 @@ int mtk_drm_get_display_caps_ioctl(struct drm_device *dev, void *data,
 		caps_info->lcm_degree = 180;
 
 	/* setting lcm_color_mode to HWC change to DSI_FILL_CONNECTOR_PROP_CAPS */
-	caps_info->lcm_color_mode = MTK_DRM_COLOR_MODE_NATIVE;
+	caps_info->lcm_color_mode = MTK_DRM_COLOR_MODE_DISPLAY_P3;
 	if (mtk_drm_helper_get_opt(private->helper_opt, MTK_DRM_OPT_OVL_WCG)) {
 		if (params)
 			caps_info->lcm_color_mode = params->lcm_color_mode;
@@ -9322,11 +9350,16 @@ static int mtk_drm_pm_notifier(struct notifier_block *notifier, unsigned long pm
 
 	switch (pm_event) {
 	case PM_SUSPEND_PREPARE:
-		if (atomic_read(&priv->kernel_pm.wakelock_cnt) != 0) {
+		if ((priv->data->mmsys_id != MMSYS_MT6765
+			&& priv->data->mmsys_id != MMSYS_MT6781
+			&& priv->data->mmsys_id != MMSYS_MT6833
+			&& priv->data->mmsys_id != MMSYS_MT6853
+			&& priv->data->mmsys_id != MMSYS_MT6885)
+			&& (atomic_read(&priv->kernel_pm.wakelock_cnt) != 0)) {
 			DDPMSG("%s PM_SUSPEND_PREPARE but wakelock is held, interrupt the suspend flow\n", __func__);
 			return NOTIFY_BAD;
 		}
-		DDPMSG("%s PM_SUSPEND_PREPARE, Disabling CRTC wakelock\n", __func__);
+		DDPMSG("Disabling CRTC wakelock\n");
 		atomic_set(&kernel_pm->status, KERNEL_PM_SUSPEND);
 		wake_up_interruptible(&kernel_pm->wq);
 		return NOTIFY_OK;
@@ -9334,31 +9367,12 @@ static int mtk_drm_pm_notifier(struct notifier_block *notifier, unsigned long pm
 #if !IS_ENABLED(CONFIG_MTK_TINYSYS_VCP_SUPPORT)
 		atomic_set(&kernel_pm->status, KERNEL_PM_RESUME);
 		wake_up_interruptible(&kernel_pm->wq);
-		DDPMSG("%s PM_POST_SUSPEND status(%d)\n", __func__, atomic_read(&kernel_pm->status));
+		DDPINFO("%s status(%d)\n", __func__, atomic_read(&kernel_pm->status));
 #endif
 		return NOTIFY_OK;
 	}
 	return NOTIFY_DONE;
 }
-#if IS_ENABLED(CONFIG_MTK_TINYSYS_VCP_SUPPORT)
-static int mtk_drm_vcp_notifier(struct notifier_block *vcp_nb, unsigned long vcp_event, void *unused)
-{
-	struct mtk_drm_kernel_pm *kernel_pm = container_of(vcp_nb, typeof(*kernel_pm), vcp_nb);
-
-	switch (vcp_event) {
-	case VCP_EVENT_READY:
-	case VCP_EVENT_STOP:
-	case VCP_EVENT_SUSPEND:
-		break;
-	case VCP_EVENT_RESUME:
-		atomic_set(&kernel_pm->status, KERNEL_PM_RESUME);
-		wake_up_interruptible(&kernel_pm->wq);
-		DDPMSG("%s VCP_EVENT_RESUME status(%d)\n", __func__, atomic_read(&kernel_pm->status));
-		break;
-	}
-	return NOTIFY_DONE;
-}
-#endif
 #else
 static int mtk_drm_pm_notifier(struct notifier_block *notifier, unsigned long pm_event, void *unused)
 {
@@ -9754,12 +9768,14 @@ static int mtk_drm_se_plane_config(struct mtk_drm_crtc *mtk_crtc)
 			//}
 		} //else
 			//mtk_crtc_all_layer_off(mtk_crtc, cmdq_handle);
+
 		mtk_crtc->se_state = DISP_SE_RUNNING;
 	}
 
 	for (i = 0; i < MTK_FB_SE_NUM; i++) {
 		DDPINFO("%s %d mtk_crtc->se_plane[%d].state.comp_state.comp_id:%d", __func__, __LINE__,
 			i, mtk_crtc->se_plane[i].state.comp_state.comp_id);
+
 		if (mtk_crtc->se_plane[i].panel_id >= 0 &&
 		    mtk_crtc->se_plane[i].state.comp_state.comp_id != 0) {
 			comp = mtk_crtc_get_plane_comp(&mtk_crtc->base,
@@ -9772,11 +9788,13 @@ static int mtk_drm_se_plane_config(struct mtk_drm_crtc *mtk_crtc)
 				mtk_crtc->se_plane[i].state.pending.width,
 				mtk_crtc->se_plane[i].state.pending.height,
 				mtk_crtc->se_plane[i].state.pending.addr);
+
 			//pts
 			if (mtk_crtc->se_plane[i].state.pending.pts != 0) {
 				DDPINFO("LATENCY_TEST %s t=%lld", __func__,
 					mtk_crtc->se_plane[i].state.pending.pts);
 			}
+
 			if (mtk_crtc->se_plane[i].state.pending.enable)
 				mtk_ddp_comp_layer_config(comp, 0,
 					&mtk_crtc->se_plane[i].state,
@@ -9793,6 +9811,7 @@ static int mtk_drm_se_plane_config(struct mtk_drm_crtc *mtk_crtc)
 
 	if (mtk_crtc->se_state == DISP_SE_STOP) {
 		mtk_crtc->se_panel = 0;
+
 		for (i = 0; i < mtk_crtc->static_plane.index; i++) {
 			comp = mtk_crtc_get_plane_comp(&mtk_crtc->base,
 				&mtk_crtc->static_plane.state[i]);
@@ -9800,11 +9819,13 @@ static int mtk_drm_se_plane_config(struct mtk_drm_crtc *mtk_crtc)
 				mtk_crtc->static_plane.state[i].comp_state.comp_id,
 				mtk_crtc->static_plane.state[i].comp_state.lye_id,
 				mtk_crtc->static_plane.state[i].comp_state.ext_lye_id);
+
 			if (mtk_crtc->static_plane.state[i].pending.enable)
 				mtk_ddp_comp_layer_config(comp, 0,
 					&mtk_crtc->static_plane.state[i],
 					cmdq_handle);
 		}
+
 		mtk_crtc->se_state = DISP_SE_STOPPED;
 	}
 
@@ -9845,6 +9866,7 @@ static int mtk_drm_set_ovl_layer(struct drm_device *dev, void *data,
 	unsigned int layer_id = 0;
 
 	sys_time = ktime_to_ns(ktime_get_boottime());
+
 	if(layer_info->pts != 0)
 		DDPINFO("LATENCY_TEST %s %lld sys_time %lld\n",
 			__func__, layer_info->pts, sys_time);
@@ -12001,17 +12023,10 @@ SKIP_OVLSYS_CONFIG:
 	atomic_set(&private->kernel_pm.wakelock_cnt, 0);
 	atomic_set(&private->kernel_pm.status, KERNEL_PM_RESUME);
 	init_waitqueue_head(&private->kernel_pm.wq);
-	/* The priority must be higher than VCP to have the opportunity to interrupt its suspend flow */
-	private->kernel_pm.nb.priority = 1;
 	private->kernel_pm.nb.notifier_call = mtk_drm_pm_notifier;
 	ret = register_pm_notifier(&private->kernel_pm.nb);
 	if (ret)
 		DDPMSG("register_pm_notifier failed %d", ret);
-
-#if IS_ENABLED(CONFIG_MTK_TINYSYS_VCP_SUPPORT) && !IS_ENABLED(CONFIG_DRM_MEDIATEK_AUTO)
-	private->kernel_pm.vcp_nb.notifier_call = mtk_drm_vcp_notifier;
-	vcp_A_register_notify_ex(VDISP_FEATURE_ID, &private->kernel_pm.vcp_nb);
-#endif
 
 	private->dsi_phy0_dev = mtk_drm_get_pd_device(dev, "dsi_phy0");
 	private->dsi_phy1_dev = mtk_drm_get_pd_device(dev, "dsi_phy1");
@@ -12329,6 +12344,18 @@ static int mtk_drm_remove(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_PM_SLEEP
+static int mtk_drm_sys_prepare(struct device *dev)
+{
+	atomic_inc(&resume_pending);
+	return 0;
+}
+
+static void mtk_drm_sys_complete(struct device *dev)
+{
+	atomic_set(&resume_pending, 0);
+	wake_up_all(&resume_wait_q);
+}
+
 static int mtk_drm_sys_suspend(struct device *dev)
 {
 	struct mtk_drm_private *private = dev_get_drvdata(dev);
@@ -12391,8 +12418,14 @@ static int mtk_drm_sys_resume(struct device *dev)
 }
 #endif
 
-static SIMPLE_DEV_PM_OPS(mtk_drm_pm_ops, mtk_drm_sys_suspend,
-			 mtk_drm_sys_resume);
+static const struct dev_pm_ops mtk_drm_pm_ops = {
+#ifdef CONFIG_PM_SLEEP
+	.prepare = mtk_drm_sys_prepare,
+	.complete = mtk_drm_sys_complete,
+	.suspend = mtk_drm_sys_suspend,
+	.resume = mtk_drm_sys_resume,
+#endif
+};
 
 static const struct of_device_id mtk_drm_of_ids[] = {
 	{.compatible = "mediatek,mt2701-mmsys",
@@ -12522,6 +12555,9 @@ static int __init mtk_drm_init(void)
 	int i;
 
 	DDPINFO("%s+\n", __func__);
+#ifdef CONFIG_MI_DISP
+	mi_disp_feature_init();
+#endif
 	for (i = 0; i < ARRAY_SIZE(mtk_drm_drivers); i++) {
 		DDPINFO("%s register %s driver\n",
 			__func__, mtk_drm_drivers[i]->driver.name);

@@ -18,16 +18,22 @@
 #include "mtk_drm_crtc.h"
 #include "mtk_drm_ddp_comp.h"
 #include "mtk_panel_ext.h"
+#ifdef CONFIG_MI_DISP
+#include "mi_disp/mi_dsi_panel.h"
+#endif
 #ifndef DRM_CMDQ_DISABLE
 #include <linux/soc/mediatek/mtk-cmdq-ext.h>
 #else
 #include "mtk-cmdq-ext.h"
 #endif
 
+#ifndef CONFIG_MI_DISP
+/* mi_disp/mi_dsi_panel.h has it with Xiaomi's display features */
 struct t_condition_wq {
 	wait_queue_head_t wq;
 	atomic_t condition;
 };
+#endif
 
 enum DSI_N_Version {
 	VER_N12 = 0,
@@ -190,7 +196,79 @@ struct mtk_dsi {
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK_AUTO_YCT)
 	enum drm_connector_status connect_status;
 #endif
+	/* Added by Xiaomi */
+#if CONFIG_MI_DISP
+  	bool fod_backlight_flag;
+  	bool fod_hbm_flag;
+  	bool normal_hbm_flag;
+  	bool dc_flag;
+  	uint32_t dc_status;
+  	struct mutex dsi_lock;
+  	struct mi_dsi_panel_cfg mi_cfg;
+  	int panel_event;
+  	struct completion bl_wait_completion;
+  	struct completion aod_wait_completion;
+  	struct delayed_work gir_off_delayed_work;
+#ifdef CONFIG_MI_DISP_FOD_SYNC
+ 	struct mi_layer_state mi_layer_state;
+#endif
+	const char * display_type;
+  	bool need_fod_animal_in_normal;
+#endif
 };
+#if CONFIG_MI_DISP
+struct lcm {
+	struct device *dev;
+	struct drm_panel panel;
+	struct backlight_device *backlight;
+	struct gpio_desc *reset_gpio;
+	struct gpio_desc *bias_pos;
+	struct gpio_desc *dvdd_gpio;
+	struct gpio_desc *cam_gpio;
+	struct gpio_desc *leden_gpio;
+	struct gpio_desc *vddio18_gpio;
+	struct gpio_desc *vci30_gpio;
+	struct gpio_desc *lcm_id_gpio;
+
+	bool prepared;
+	bool enabled;
+	bool hbm_en;
+	bool wqhd_en;
+	bool dc_status;
+	bool hbm_enabled;
+	bool lhbm_en;
+	bool doze_suspend;
+
+	int error;
+	const char *panel_info;
+	int dynamic_fps;
+	u32 doze_brightness_state;
+	u32 doze_state;
+
+	struct pinctrl *pinctrl_gpios;
+	struct pinctrl_state *err_flag_irq;
+	struct drm_connector *connector;
+
+	u32 max_brightness_clone;
+	u32 factory_max_brightness;
+	u32 ic_type;
+	struct mutex panel_lock;
+	int bl_max_level;
+	int gir_status;
+	int spr_status;
+	int crc_level;
+	int mode_index;
+	unsigned int gate_ic;
+	int panel_id;
+	int gray_level;
+
+	/* DDIC auto update gamma */
+	u32 last_refresh_rate;
+	bool need_auto_update_gamma;
+	ktime_t last_mode_switch_time;
+	int peak_hdr_status;
+};
+#endif
 
 enum dsi_porch_type;
 

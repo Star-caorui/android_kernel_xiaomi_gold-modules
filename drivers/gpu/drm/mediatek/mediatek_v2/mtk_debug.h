@@ -49,6 +49,7 @@ enum MTK_DRM_DEBUG_LOG_SWITCH_OPS {
 };
 
 extern int mtk_disp_hrt_bw_dbg(void);
+int mtk_disp_set_cabc_mode(unsigned int mode);
 
 struct cb_data_store {
 	struct cmdq_cb_data data;
@@ -94,7 +95,7 @@ bool mtkfb_is_force_partial_roi(void);
 int mtkfb_force_partial_y_offset(void);
 int mtkfb_force_partial_height(void);
 
-int mtk_ddic_dsi_send_cmd(struct mtk_ddic_dsi_msg *cmd_msg, bool blocking);
+int mtk_ddic_dsi_send_cmd(struct mtk_ddic_dsi_msg *cmd_msg, bool blocking, bool no_lock);
 int mtk_ddic_dsi_read_cmd(struct mtk_ddic_dsi_msg *cmd_msg);
 bool mtk_disp_get_logger_enable(void);
 #endif

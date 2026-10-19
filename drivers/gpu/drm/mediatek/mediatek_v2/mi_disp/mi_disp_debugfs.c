@@ -4,7 +4,7 @@
  * Copyright (C) 2020 XiaoMi, Inc.
  */
 
-#define pr_fmt(fmt)	"mi-disp-debugfs:[%s:%d] " fmt, __func__, __LINE__
+#define pr_fmt(fmt) "mi-disp-debugfs: " fmt
 #include <linux/slab.h>
 #include <linux/fs.h>
 #include <linux/types.h>

@@ -21,7 +21,7 @@ ifeq ($(CONFIG_MI_DISP_ESD_CHECK), y)
 mediatek-drm-y += mi_disp/mi_disp_esd_check.o
 endif
 
-ifeq ($(CONFIG_MI_DISP_DFS_EVENT), y)
+ifneq ($(CONFIG_MIEV),)
 mediatek-drm-y += mi_disp/mi_disp_event.o
 endif
 

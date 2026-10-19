@@ -4,7 +4,7 @@
  * Copyright (C) 2020 XiaoMi, Inc.
  */
 
-#define pr_fmt(fmt)	"mi-disp-lhbm:[%s:%d] " fmt, __func__, __LINE__
+#define pr_fmt(fmt) "mi-disp-lhbm: " fmt
 
 #include <linux/slab.h>
 #include <linux/spinlock.h>
@@ -37,7 +37,7 @@ struct mtk_dsi * mi_get_primary_dsi_display(void)
 		return NULL;
 	}
 }
-EXPORT_SYMBOL(mi_get_primary_dsi_display);
+
 bool is_local_hbm(int disp_id)
 {
 	struct mtk_dsi *dsi = mi_get_primary_dsi_display();

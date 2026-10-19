@@ -3,7 +3,7 @@
  * Copyright (c) 2020, The Linux Foundation. All rights reserved.
  * Copyright (c) 2020 XiaoMi, Inc. All rights reserved.
  */
-#define pr_fmt(fmt) "mi_disp_event:[%s:%d] " fmt, __func__, __LINE__
+#define pr_fmt(fmt) "mi_disp_event: " fmt
 
 #include "mi_disp_print.h"
 #include "mi_disp_event.h"
@@ -51,8 +51,6 @@ const char *get_mievent_type_name(int event_type)
 		return "backlight_zero";
 	case MI_EVENT_PINGPONG_TIMEOUT:
 		return "dsi_pingpong_timeout";
-	case MI_EVENT_CMDQ_TIMEOUT:
-		return "cmdq_timeout";
 	case MI_EVENT_DMA_CMD_TIMEOUT:
 		return "dsi_dma_cmd_timeout";
 	case MI_EVENT_RD_PTR_TIMEOUT:
@@ -316,12 +314,6 @@ void mi_disp_mievent_int(int disp_id,struct mi_event_info *mievent){
 		DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
 			mievent->event_type,event_name,err_count[13]);
 		cdev_tevent_add_int(event, event_name, err_count[13]);
-	break;
-	case MI_EVENT_CMDQ_TIMEOUT:
-		err_count[14]++;
-		DISP_INFO("[DIS-TF-DISPLAY] event_type[%d],event_name[%s],err_count = %d\n",
-			mievent->event_type,event_name,err_count[14]);
-		cdev_tevent_add_int(event, event_name, err_count[14]);
 	break;
 	default:
 		ESD_TYPE = mievent->event_type;

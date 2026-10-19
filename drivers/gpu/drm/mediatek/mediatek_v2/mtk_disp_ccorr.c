@@ -26,6 +26,9 @@
 #include "mtk_drm_helper.h"
 #include "platform/mtk_drm_platform.h"
 #include "mtk_disp_pq_helper.h"
+#ifdef CONFIG_MI_DISP
+#include "mi_disp/mi_disp_feature.h"
+#endif
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK_AUTO) && IS_ENABLED(CONFIG_DRM_MTK_R2Y)
 #include "mtk_disp_gamma.h"
 #include "mtk_disp_aal.h"
@@ -531,6 +534,9 @@ void disp_ccorr_notify_backlight_changed(struct mtk_ddp_comp *comp, int bl_1024)
 		return;
 
 	DDPINFO("%s: %d\n", __func__, bl_1024);
+#ifdef CONFIG_MI_DISP
+	mi_disp_feature_event_notify_by_type(mi_get_disp_id("primary"), MI_DISP_EVENT_BACKLIGHT, sizeof(bl_1024), bl_1024);
+#endif
 
 	if (pq_data->new_persist_property[DISP_PQ_CCORR_SILKY_BRIGHTNESS]) {
 		if (primary_data->relay_state != 0) {

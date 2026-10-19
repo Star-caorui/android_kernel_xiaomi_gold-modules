@@ -4,7 +4,7 @@
  * Copyright (C) 2020 XiaoMi, Inc.
  */
 
-#define pr_fmt(fmt)	"mi-disp-procfs:[%s:%d] " fmt, __func__, __LINE__
+#define pr_fmt(fmt) "mi-disp-procfs: " fmt
 #include <linux/slab.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>

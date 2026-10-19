@@ -4,7 +4,7 @@
  * Copyright (C) 2020 XiaoMi, Inc.
  */
 
-#define pr_fmt(fmt) "mi_drm_crtc:[%s:%d] " fmt, __func__, __LINE__
+#define pr_fmt(fmt) "mi_drm_crtc: " fmt
 
 #include <drm/drm_crtc.h>
 #include <linux/completion.h>

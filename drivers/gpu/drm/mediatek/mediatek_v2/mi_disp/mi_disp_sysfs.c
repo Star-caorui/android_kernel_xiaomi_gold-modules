@@ -4,7 +4,7 @@
  * Copyright (C) 2020 XiaoMi, Inc.
  */
 
-#define pr_fmt(fmt)	"mi_disp_sysfs:[%s] " fmt, __func__
+#define pr_fmt(fmt) "mi_disp_sysfs: " fmt
 
 #include <linux/device.h>
 #include <linux/err.h>
@@ -17,6 +17,7 @@
 #include "mi_dsi_display.h"
 #include "mi_disp_print.h"
 #include "mi_dsi_panel.h"
+#include "../mtk_debug.h"
 #include "mtk_dsi.h"
 //#define to_dsi_bridge(x)     container_of((x), struct dsi_bridge, base)
 
@@ -31,7 +32,7 @@ static ssize_t disp_param_store(struct device *device,
 	char *token, *input_copy, *input_dup = NULL;
 	const char *delim = " ";
 	u32 tmp_data = 0;
-	int ret = 0;
+	int ret = 0, index = 0;
 
 	memset(&ctl, 0, sizeof(struct disp_feature_ctl));
 
@@ -62,22 +63,53 @@ static ssize_t disp_param_store(struct device *device,
 		}
 	}
 
-	/* Removes leading whitespace from input_copy */
-	if (input_copy) {
-		input_copy = skip_spaces(input_copy);
-	} else {
-		DISP_ERROR("please check the number of parameters\n");
-		ret = -EAGAIN;
-		goto exit_free;
-	}
+	if (ctl.feature_id == DISP_FEATURE_BIST_MODE_COLOR) {
+		ctl.tx_ptr = kzalloc(sizeof(u8) * 3, GFP_KERNEL);
+		if (!ctl.tx_ptr) {
+			DISP_ERROR("vmalloc failed for DISP_FEATURE_BIST_MODE\n");
+			goto exit_free;
+		}
+		for (index = 0; index < 3; index++) {
+			/* Removes leading whitespace from input_copy */
+			if (input_copy) {
+				input_copy = skip_spaces(input_copy);
+			} else {
+				DISP_ERROR("please check the number of parameters\n");
+				ret = -EAGAIN;
+				kfree(ctl.tx_ptr);
+				goto exit_free;
+			}
 
-	ret = kstrtoint(input_copy, 10, &tmp_data);
-	if (ret) {
-		DISP_ERROR("input buffer conversion failed\n");
-		ret = -EAGAIN;
-		goto exit_free;
+			token = strsep(&input_copy, delim);
+			if (token) {
+				ret = kstrtoint(token, 10, &tmp_data);
+				if (ret) {
+					DISP_ERROR("input buffer conversion failed\n");
+					ret = -EAGAIN;
+					kfree(ctl.tx_ptr);
+					goto exit_free;
+				}
+				ctl.tx_ptr[index] = tmp_data & 0xFF;
+			}
+		}
+	} else {
+		/* Removes leading whitespace from input_copy */
+		if (input_copy) {
+			input_copy = skip_spaces(input_copy);
+		} else {
+			DISP_ERROR("please check the number of parameters\n");
+			ret = -EAGAIN;
+			goto exit_free;
+		}
+
+		ret = kstrtoint(input_copy, 10, &tmp_data);
+		if (ret) {
+			DISP_ERROR("input buffer conversion failed\n");
+			ret = -EAGAIN;
+			goto exit_free;
+		}
+		ctl.feature_val = tmp_data;
 	}
-	ctl.feature_val = tmp_data;
 
 	if (dd_ptr->intf_type == MI_INTF_DSI) {
 		ret = mi_dsi_display_set_disp_param(dd_ptr->display, &ctl);
@@ -109,6 +141,38 @@ static ssize_t disp_param_show(struct device *device,
 	}
 }
 
+static ssize_t mipi_rw_store(struct device *device,
+			   struct device_attribute *attr,
+			   const char *buf, size_t count)
+{
+	struct disp_display *dd_ptr = to_disp_display(device);
+	int ret = 0;
+
+	if (dd_ptr->intf_type == MI_INTF_DSI) {
+		ret = mi_dsi_display_write_mipi_reg(dd_ptr->display, (char *)buf);
+	} else {
+		DISP_ERROR("Unsupported display(%s intf)\n",
+			get_disp_intf_type_name(dd_ptr->intf_type));
+		ret = -EINVAL;
+	}
+
+	return ret ? ret : count;
+}
+
+static ssize_t mipi_rw_show(struct device *device,
+			   struct device_attribute *attr,
+			   char *buf)
+{
+	struct disp_display *dd_ptr = to_disp_display(device);
+
+	if (dd_ptr->intf_type == MI_INTF_DSI) {
+		return mi_dsi_display_read_mipi_reg(dd_ptr->display, buf);
+	} else {
+		return snprintf(buf, PAGE_SIZE, "Unsupported display(%s intf)\n",
+			get_disp_intf_type_name(dd_ptr->intf_type));
+	}
+}
+
 static ssize_t gir_store(struct device *device,
 			   struct device_attribute *attr,
 			   const char *buf, size_t count)
@@ -131,7 +195,7 @@ static ssize_t gir_store(struct device *device,
 	return ret ? ret : count;
 }
 
-static ssize_t flat_mode_show(struct device *device,
+static ssize_t flatmode_check_show(struct device *device,
 			   struct device_attribute *attr,
 			   char *buf)
 {
@@ -197,20 +261,6 @@ static ssize_t wp_info_show(struct device *device,
 
 }
 
-
-static ssize_t sn_info_show(struct device *device,
-			struct device_attribute *attr, char *buf)
-{
-	size_t sninfo_size = 14;
-	struct disp_display *dd_ptr = to_disp_display(device);
-	if (dd_ptr->intf_type == MI_INTF_DSI) {
-		return mi_dsi_display_read_sn_info(dd_ptr->display, buf, sninfo_size);
-	} else {
-		return snprintf(buf, PAGE_SIZE, "Unsupported display(%s intf)\n",
-			get_disp_intf_type_name(dd_ptr->intf_type));
-	}
-
-}
 
 
 
@@ -313,6 +363,18 @@ static ssize_t brightness_clone_store(struct device *device,
 	return ret ? ret : count;
 }
 
+static ssize_t max_brightness_clone_show(struct device *device,
+				struct device_attribute *attr, char *buf)
+{
+	int max_brightness_clone = 4095;
+	struct disp_display *dd_ptr = to_disp_display(device);
+
+	mi_dsi_display_get_max_brightness_clone(dd_ptr->display, &max_brightness_clone);
+
+	return snprintf(buf, PAGE_SIZE, "%d\n", max_brightness_clone);
+
+}
+
 static ssize_t factory_max_brightness_show(struct device *device,
   				struct device_attribute *attr, char *buf)
   {
@@ -320,75 +382,6 @@ static ssize_t factory_max_brightness_show(struct device *device,
  	struct disp_display *dd_ptr = to_disp_display(device);
 	mi_dsi_display_get_factory_max_brightness(dd_ptr->display,&factory_max_brightness);
   	return snprintf(buf, PAGE_SIZE, "%d\n", factory_max_brightness);
-}
-
-static ssize_t backlight_show(struct device *device,
-		struct device_attribute *attr, char *buf)
-{
-	char read_mipireg[]= "01 02 06 01 00 00 00 00 01 52";
-	int ret = 0;
-	int backlight = 0;
-	struct disp_display *dd_ptr = to_disp_display(device);
-	int temp_backlight = 0;
-	char *temp_ptr1, *temp_ptr2;
-	if (dd_ptr->intf_type == MI_INTF_DSI) {
-		ret = mi_dsi_display_write_mipi_reg(dd_ptr->display, (char *)read_mipireg);
-	} else {
-		DISP_ERROR("Unsupported display(%s intf)\n",
-			get_disp_intf_type_name(dd_ptr->intf_type));
-		ret = -EINVAL;
-		return ret;
-	}
-
-	if (dd_ptr->intf_type == MI_INTF_DSI) {
-		ret = mi_dsi_display_read_mipi_reg(dd_ptr->display, buf);
-	} else {
-		return snprintf(buf, PAGE_SIZE, "Unsupported display(%s intf)\n",
-			get_disp_intf_type_name(dd_ptr->intf_type));
-	}
-
-	temp_ptr1 = buf;
-	while ((temp_ptr2 = strsep(&temp_ptr1, ",")) != NULL) {
-		sscanf(temp_ptr2, "%x", &temp_backlight);
-		backlight = backlight<<8;
-		backlight = backlight|temp_backlight;
-	}
-	return snprintf(buf, PAGE_SIZE, "%d\n", backlight);
-}
-
-static ssize_t backlight_store(struct device *device,
-		struct device_attribute *attr, const char *buf, size_t count)
-{
-	int ret = 0;
-	char temp[20] = "";
-	struct disp_display *dd_ptr = to_disp_display(device);
-	unsigned long backlight;
-	unsigned int hight_backlight, low_backlight;
-	char write_mipireg[60]= "00 00 39 01 00 00 00 00 03 51 ";
-	ret = kstrtoul(buf, 0, &backlight);
-	if(ret)
-		return ret;
-
-	low_backlight = backlight & 0xFF;
-	hight_backlight = (backlight >> 8) & 0xFF;
-	sprintf(temp, "%02X", hight_backlight);
-	strcat(write_mipireg, temp);
-	sprintf(temp, " %02X", low_backlight);
-	strcat(write_mipireg, temp);
-
-	if (dd_ptr->intf_type == MI_INTF_DSI) {
-#ifdef CONFIG_MI_DISP_LED_I2C_REG_ENABLE
-		ret = mi_dsi_display_led_i2c_setbacklight(dd_ptr->display, backlight);
-#else
-		ret = mi_dsi_display_write_mipi_reg(dd_ptr->display, (char *)write_mipireg);
-#endif
-	} else {
-		DISP_ERROR("Unsupported display(%s intf)\n",
-			get_disp_intf_type_name(dd_ptr->intf_type));
-		ret = -EINVAL;
-	}
-	mi_disp_feature_event_notify_by_type(mi_get_disp_id("primary"), MI_DISP_EVENT_51_BRIGHTNESS, sizeof((int)backlight), (int)backlight);
-	return ret ? ret : count;
 }
 
 static ssize_t panel_event_show(struct device *device,
@@ -412,7 +405,7 @@ static ssize_t disp_count_store(struct device *device,
 	int ret = 0;
 
 	if (dd_ptr->intf_type == MI_INTF_DSI) {
-		ret = mi_dsi_display_set_disp_count(dd_ptr->display, (char *)buf);
+		return mi_dsi_display_set_disp_count(dd_ptr->display, (char *)buf);
 	} else {
 		DISP_ERROR("Unsupported display(%s intf)\n",
 			get_disp_intf_type_name(dd_ptr->intf_type));
@@ -556,6 +549,45 @@ static ssize_t idle_show(struct device *device,
 	}
 }
 
+static ssize_t cabc_mode_show(struct device *device,
+			   struct device_attribute *attr,
+			   char *buf)
+{
+	struct disp_display *dd_ptr = to_disp_display(device);
+	int cabc_mode = 0;
+
+	if (dd_ptr->intf_type == MI_INTF_DSI) {
+		mi_dsi_display_get_cabc_mode(dd_ptr->display, &cabc_mode);
+		if (cabc_mode < 0)
+			return snprintf(buf, PAGE_SIZE, "invalid\n");
+		else
+			return snprintf(buf, PAGE_SIZE, "%d\n", cabc_mode);
+	} else {
+		return snprintf(buf, PAGE_SIZE, "Unsupported display(%s intf)\n",
+			get_disp_intf_type_name(dd_ptr->intf_type));
+	}
+}
+
+static ssize_t cabc_mode_store(struct device *device,
+			   struct device_attribute *attr,
+			   const char *buf, size_t count)
+{
+	unsigned int cabc_mode = 0;
+	int ret = 0;
+
+	ret = kstrtouint(buf, 16, &cabc_mode);
+	if (ret) {
+		DISP_ERROR("Incorrect set cabc_mode, ret: %d, buf: %s", ret, buf);
+		return ret;
+	}
+
+	cabc_mode &= 0xf;
+	DISP_INFO("display set cabc_mode value is : %u", cabc_mode);
+	ret = mtk_disp_set_cabc_mode(cabc_mode);
+
+	return ret ? ret : count;
+}
+
 #if 0
 static ssize_t gamma_test_show(struct device *device,
 		struct device_attribute *attr, char *buf)
@@ -597,14 +629,15 @@ static ssize_t hw_vsync_info_show(struct device *device,
 
 #endif
 static DEVICE_ATTR_RW(disp_param);
+static DEVICE_ATTR_RW(mipi_rw);
 static DEVICE_ATTR_RO(panel_info);
 static DEVICE_ATTR_RO(wp_info);
 static DEVICE_ATTR_RO(gray_scale_info);
 static DEVICE_ATTR_RO(dynamic_fps);
 static DEVICE_ATTR_RW(doze_brightness);
 static DEVICE_ATTR_RW(brightness_clone);
+static DEVICE_ATTR_RO(max_brightness_clone);
 static DEVICE_ATTR_RO(factory_max_brightness);
-static DEVICE_ATTR_RW(backlight);
 static DEVICE_ATTR_RW(gir);
 static DEVICE_ATTR_RW(disp_count);
 static DEVICE_ATTR_RW(dc_status);
@@ -614,8 +647,8 @@ static DEVICE_ATTR_RW(ext_mv);
 static DEVICE_ATTR_RW(led_i2c_reg);
 static DEVICE_ATTR_RO(panel_event);
 static DEVICE_ATTR_RW(idle);
-static DEVICE_ATTR_RO(flat_mode);
-static DEVICE_ATTR_RO(sn_info);
+static DEVICE_ATTR_RO(flatmode_check);
+static DEVICE_ATTR_RW(cabc_mode);
 
 #if 0
 static DEVICE_ATTR_RO(gamma_test);
@@ -624,15 +657,15 @@ static DEVICE_ATTR_RO(hw_vsync_info);
 
 static struct attribute *disp_feature_attrs[] = {
 	&dev_attr_disp_param.attr,
+	&dev_attr_mipi_rw.attr,
 	&dev_attr_panel_info.attr,
 	&dev_attr_wp_info.attr,
-	&dev_attr_sn_info.attr,
 	&dev_attr_gray_scale_info.attr,
 	&dev_attr_dynamic_fps.attr,
 	&dev_attr_doze_brightness.attr,
 	&dev_attr_brightness_clone.attr,
+	&dev_attr_max_brightness_clone.attr,
 	&dev_attr_factory_max_brightness.attr,
-	&dev_attr_backlight.attr,
 	&dev_attr_gir.attr,
 	&dev_attr_disp_count.attr,
 	&dev_attr_dc_status.attr,
@@ -642,7 +675,8 @@ static struct attribute *disp_feature_attrs[] = {
 	&dev_attr_led_i2c_reg.attr,
 	&dev_attr_panel_event.attr,
 	&dev_attr_idle.attr,
-	&dev_attr_flat_mode.attr,
+	&dev_attr_flatmode_check.attr,
+	&dev_attr_cabc_mode.attr,
 #if 0
 	&dev_attr_gamma_test.attr,
 	&dev_attr_hw_vsync_info.attr,

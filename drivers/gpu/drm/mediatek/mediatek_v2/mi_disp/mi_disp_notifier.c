@@ -42,7 +42,7 @@ EXPORT_SYMBOL(mi_disp_unregister_client);
  */
 int mi_disp_notifier_call_chain(unsigned long val, void *v)
 {
-	pr_info("%s, notify = %lu\n", __func__, val);
+	pr_info("%s, notify = %u\n", __func__, val);
 	return blocking_notifier_call_chain(&mi_disp_notifier_list, val, v);
 }
 EXPORT_SYMBOL(mi_disp_notifier_call_chain);

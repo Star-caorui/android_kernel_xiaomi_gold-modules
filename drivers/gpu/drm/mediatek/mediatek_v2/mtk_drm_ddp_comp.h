@@ -986,6 +986,26 @@ enum mtk_ddp_io_cmd {
 	GET_FRAME_HRT_BW_BY_MODE,
 	DSI_SEND_DDIC_CMD,
 	DSI_READ_DDIC_CMD,
+
+	/*
+	 * Xiaomi's commands, and gold's CABC one, follow DSI_READ_DDIC_CMD
+	 * and the ESD ones end the list, as in stock's numbering.
+	 */
+#ifdef CONFIG_MI_DISP
+	MI_DSI_READ_DDIC_CMD,
+	MI_SET_BL_BY_I2C,
+	MI_SET_DC_CRC,
+	MI_SET_DC_CRC_OFF,
+	MI_GET_DC_STATUS,
+	MI_SET_DC_BACKLIGHT,
+	MI_SET_DC_THRESHOLD,
+	MI_SET_BACKLIGHT_DIMMING,
+	MI_RESTORE_CRC_LEVEL,
+	MI_SET_DC_CRC_BL_PACK,
+	MI_GET_WP_INFO,
+	MI_DSI_SET_CABC_MODE,
+#endif
+
 	DSI_GET_VIRTUAL_HEIGH,
 	DSI_GET_VIRTUAL_WIDTH,
 	FRAME_DIRTY,
@@ -1047,6 +1067,13 @@ enum mtk_ddp_io_cmd {
 	DSI_LTPO_VDO_SET,
 	DSI_LTPO_VDO_UPDATE,
 	DSI_GET_PANEL_VBLANK_PERIOD_US,
+
+#ifdef CONFIG_MI_DISP_ESD_CHECK
+	ESD_RESTORE_BACKLIGHT,
+	MI_DISP_ESD_CHECK_READ,
+	MI_DISP_ESD_CHECK_CMP,
+#endif
+
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK_AUTO)
 	SET_CRTC_ID,
 #endif
@@ -1237,6 +1264,7 @@ struct mtk_ddp_comp {
 	struct mtk_ddp_comp *bind_comp;
 	int pm_ret;
 	u32 doze_bypass;
+	struct mutex panel_lock;
 };
 
 static inline void mtk_ddp_comp_config_overhead(struct mtk_ddp_comp *comp,

@@ -39,7 +39,7 @@
 #endif
 
 #include "mtk_drm_helper.h"
-#include "mtk_mipi_tx.h"
+/* not mtk_mipi_tx.h: its register macros clash with mtk_reg_disp_bdg.h, which MT6382 code includes */
 #include "mtk_dump.h"
 #include "mtk_log.h"
 #include "mtk_drm_lowpower.h"
@@ -104,9 +104,6 @@ struct mi_dsi_panel_cfg {
 	/* xiaomi feature values */
 	int feature_val[DISP_FEATURE_MAX];
 
-	/* xiaomi count info values */
-	int count_info_val[DISP_COUNT_INFO_MAX];
-
 	/* bl_is_big_endian indicate brightness value
 	 * high byte to 1st parameter, low byte to 2nd parameter
 	 * eg: 0x51 { 0x03, 0xFF } ->
@@ -164,16 +161,10 @@ struct mi_dsi_panel_cfg {
 	u32 lhbm_ui_ready_delay_frame;
 	u32 lhbm_ui_ready_delay_frame_aod;
 	bool need_fod_animal_in_normal;
-#ifdef CONFIG_MI_DISP_DFS_EVENT
-	u64 timestamp_panelon;
-	u64 timestamp_backlight_zero;
-	bool whether_backlight_zero;
-#endif
-	u32 is_tddi_flag;
-	bool tddi_gesture_flag;
-	bool panel_dead_flag;
-	bool esd_status;
-	void (*mi_display_gesture_cb)(void);
+	int fod_low_brightness_lux_threshold;
+	int fod_low_brightness_clone_threshold;
+	bool fod_low_brightness_allow;
+	enum ddic_cabc_status cabc_state;
 };
 
 /* Enter/Exit DC_LUT info */
@@ -213,7 +204,6 @@ ssize_t dsi_panel_write_mipi_reg(char *buf, size_t count);
 ssize_t  dsi_panel_read_mipi_reg(char *buf);
 void panel_gir_off_delayed_work(struct work_struct* work);
 
-ssize_t  led_i2c_set_backlight(struct mtk_dsi *dsi, unsigned int level);
 ssize_t led_i2c_reg_write(struct mtk_dsi *dsi, char *buf, size_t count);
 ssize_t led_i2c_reg_read(struct mtk_dsi *dsi, char *buf);
 
@@ -246,14 +236,13 @@ int mi_dsi_panel_set_disp_param(struct mtk_dsi *dsi, struct disp_feature_ctl *ct
 
 ssize_t mi_dsi_panel_write_mipi_reg(char *buf);
 
-int mi_dsi_panel_set_fp_unlock_state(struct mtk_dsi *dsi,
-			u32 fp_unlock_value);
 
 ssize_t mi_dsi_panel_enable_gir(struct mtk_dsi *dsi, char *buf);
 
 ssize_t mi_dsi_panel_disable_gir(struct mtk_dsi *dsi, char *buf);
 
 int mi_dsi_panel_get_gir_status(struct mtk_dsi *dsi);
+int mi_dsi_panel_get_cabc_mode(struct mtk_dsi *dsi, int *mode);
 
 ssize_t  mi_dsi_panel_read_mipi_reg(char *buf);
 
@@ -275,26 +264,15 @@ void mi_dsi_panel_rewrite_enterDClut(char *exitDClut, char *enterDClut, int coun
 ssize_t mi_dsi_panel_read_and_update_dc_param(struct mtk_dsi *dsi);
 
 int mi_dsi_panel_get_wp_info(struct mtk_dsi *dsi, char *buf, size_t size);
+void mi_dsi_panel_tigger_dimming_work(struct mtk_dsi *dsi);
 
-int mi_dsi_panel_get_sn_info(struct mtk_dsi *dsi, char *buf, size_t size);
 
 
 int mi_dsi_panel_get_grayscale_info(struct mtk_dsi *dsi, char *buf, size_t size);
 
 bool is_aod_and_panel_initialized(struct mtk_dsi *dsi);
 
-int mi_dsi_panel_set_count_info(struct mtk_dsi *dsi, struct disp_count_info *count_info);
 
-void mi_dsi_panel_set_cur_color_mode(int curColorMode);
-
-int mi_dsi_panel_get_cur_color_mode(void);
-
-void mi_dsi_panel_set_cur_dolby_status(int curDolbyStatus);
-
-int mi_dsi_panel_get_cur_dolby_status(void);
-int mi_dsi_panel_set_repaint_status(struct mtk_drm_helper *helper_opt, int value);
-int mi_dsi_panel_get_ic_type(struct mtk_dsi *dsi, u32 *ic_type);
-void nvt_ts_display_esd_flag(bool* esd_flag);
 #if defined(CONFIG_VIS_DISPLAY)
 int mi_dsi_panel_chk_tricking_status(void);
 #endif

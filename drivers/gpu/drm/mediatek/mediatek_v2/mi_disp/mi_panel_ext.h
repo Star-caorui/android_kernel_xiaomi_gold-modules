@@ -25,7 +25,6 @@ struct LCM_param_read_write {
 struct LCM_mipi_read_write {
 	unsigned int read_enable;
 	unsigned int read_count;
-	unsigned int read_inversion;
 	unsigned char read_buffer[80];
 	struct LCM_setting_table lcm_setting_table;
 };
@@ -59,16 +58,13 @@ extern struct LCM_mipi_read_write lcm_mipi_read_write;
 extern struct LCM_led_i2c_read_write lcm_led_i2c_read_write;
 
 int mtk_ddic_dsi_read_cmd(struct mtk_ddic_dsi_msg *cmd_msg);
-int mtk_ddic_dsi_send_cmd(struct mtk_ddic_dsi_msg *cmd_msg, bool blocking);
-int mtk_ddic_dsi_send_cmd_with_lock(struct mtk_ddic_dsi_msg *cmd_msg, bool blocking, bool no_lock, bool gce_block);
-int mtk_ddic_dsi_wait_te_send_cmd(struct mtk_ddic_dsi_msg *cmd_msg, bool blocking);
+int mtk_ddic_dsi_send_cmd(struct mtk_ddic_dsi_msg *cmd_msg, bool blocking, bool no_lock);
 /*
  format :
  BIT0: 0 for no wait te, 1 for wait te(only cmd panel)
  BIT1: 0 for no block when send cmd, 1 for block when send cmd
  BIT2: 0 for HS mode, 1 for LP mode
 */
-int mi_disp_panel_ddic_send_cmd(struct LCM_setting_table *table, unsigned int count,  unsigned int format);
 int mi_dsi_panel_set_doze_brightness(struct mtk_dsi *dsi, int doze_brightness);
 
 #endif

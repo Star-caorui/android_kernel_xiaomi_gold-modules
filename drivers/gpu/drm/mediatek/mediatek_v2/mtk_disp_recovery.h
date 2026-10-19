@@ -28,6 +28,11 @@ struct mtk_drm_esd_ctx {
 	u32 chk_sta;
 	u32 chk_en;
 	u32 chk_retry;
+#ifdef CONFIG_MI_DISP_ESD_CHECK
+	struct task_struct *mi_disp_esd_chk_task;
+	bool panel_init;
+	char esd_read_result [ESD_CHECK_NUM][10];
+#endif
 };
 int mtk_drm_esd_testing_process(struct mtk_drm_esd_ctx *esd_ctx, bool need_lock);
 

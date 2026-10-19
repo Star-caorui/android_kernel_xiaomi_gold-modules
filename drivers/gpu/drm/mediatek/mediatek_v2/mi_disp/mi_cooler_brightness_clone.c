@@ -59,7 +59,7 @@ static int mi_cooler_brightness_clone_set_cur_state(
 	u32 thermal_limit_brightness_clone = 0;
 
 	if (state == 0 || state > MAX_THERMAL_STATE) {
-		pr_err("%s: invalid state %lu\n", __func__, state);
+		pr_err("%s: invalid state %d\n", __func__, state);
 		return -1;
 	}
 
@@ -70,7 +70,7 @@ static int mi_cooler_brightness_clone_set_cur_state(
 	//mi_dsi_display_set_thermal_limit_brightness_clone(dsi, thermal_limit_brightness_clone);
         sysfs_notify(&cdev->device.kobj, NULL, "cur_state");
 
-	mi_cooler_brightness_clone_dprintk("%s: %lu\n", __func__, state);
+	mi_cooler_brightness_clone_dprintk("%s: %d\n", __func__, state);
 
 	return 0;
 }

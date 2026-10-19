@@ -35,6 +35,14 @@
 #include "mtk_disp_bdg.h"
 #include "mtk_dsi.h"
 
+#ifdef CONFIG_MI_DISP
+#include <uapi/drm/mi_disp.h>
+#endif
+
+#if IS_ENABLED(CONFIG_MIEV)
+#include "mi_disp/mi_disp_event.h"
+#endif
+
 #define ESD_TRY_CNT 5
 #define ESD_CHK_TRY_CNT 5
 #define ESD_CHECK_PERIOD 2000 /* ms */
@@ -222,8 +230,12 @@ int _mtk_esd_check_read(struct drm_crtc *crtc)
 		/* Record Vblank start timestamp */
 		mtk_vblank_config_rec_start(mtk_crtc, cmdq_handle, ESD_CHECK);
 
+#ifdef CONFIG_MI_DISP_ESD_CHECK
+		mtk_ddp_comp_io_cmd(output_comp, cmdq_handle, MI_DISP_ESD_CHECK_READ, NULL);
+#else
 		mtk_ddp_comp_io_cmd(output_comp, cmdq_handle, ESD_CHECK_READ,
 				    (void *)mtk_crtc);
+#endif
 
 		cmdq_pkt_set_event(cmdq_handle,
 				   mtk_crtc->gce_obj.event[EVENT_CABC_EOF]);
@@ -276,7 +288,13 @@ int _mtk_esd_check_read(struct drm_crtc *crtc)
 	esd_ctx->chk_retry = 0;
 	esd_ctx->chk_sta = 0;
 	CRTC_MMP_MARK(index, esd_check, 2, 4);
-	cmdq_pkt_flush(cmdq_handle);
+	if (mtk_dsi_is_cmd_mode(output_comp)) { /*cmd mode*/
+#ifndef CONFIG_MI_DISP_ESD_CHECK
+		cmdq_pkt_flush(cmdq_handle);
+#endif
+	} else {
+		cmdq_pkt_flush(cmdq_handle);
+	}
 
 	CRTC_MMP_MARK(index, esd_check, 2, 5);
 
@@ -299,8 +317,17 @@ int _mtk_esd_check_read(struct drm_crtc *crtc)
 		goto done;
 	}
 
-	ret = mtk_ddp_comp_io_cmd(output_comp, NULL, ESD_CHECK_CMP,
-				  (void *)mtk_crtc);
+	if (mtk_dsi_is_cmd_mode(output_comp)) { /*cmd mode*/
+#ifdef CONFIG_MI_DISP_ESD_CHECK
+		ret = mtk_ddp_comp_io_cmd(output_comp, NULL, MI_DISP_ESD_CHECK_CMP, NULL);
+#else
+		ret = mtk_ddp_comp_io_cmd(output_comp, NULL, ESD_CHECK_CMP,
+					  (void *)mtk_crtc);
+#endif
+	} else { /*video mode*/
+		ret = mtk_ddp_comp_io_cmd(output_comp, NULL, ESD_CHECK_CMP,
+					  (void *)mtk_crtc);
+	}
 done:
 	cmdq_pkt_destroy(cmdq_handle);
 	return ret;
@@ -463,6 +490,19 @@ done:
 	return ret;
 }
 
+#ifdef CONFIG_MI_DISP_ESD_CHECK
+static atomic_t panel_dead;
+int get_panel_dead_flag(void) {
+	return atomic_read(&panel_dead);
+}
+EXPORT_SYMBOL(get_panel_dead_flag);
+
+void set_panel_dead_flag(int value) {
+	atomic_set(&panel_dead, value);
+}
+EXPORT_SYMBOL(set_panel_dead_flag);
+#endif
+
 static int mtk_drm_esd_recover(struct drm_crtc *crtc)
 {
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
@@ -473,6 +513,9 @@ static int mtk_drm_esd_recover(struct drm_crtc *crtc)
 	int index = drm_crtc_index(crtc);
 	struct mtk_dsi *dsi = NULL;
 
+#ifdef CONFIG_MI_DISP_ESD_CHECK
+	atomic_set(&panel_dead, 1);
+#endif
 	CRTC_MMP_EVENT_START(index, esd_recovery, 0, 0);
 	if (crtc->state && !crtc->state->active) {
 		DDPMSG("%s: crtc is inactive\n", __func__);
@@ -552,6 +595,10 @@ static int mtk_drm_esd_recover(struct drm_crtc *crtc)
 
 	CRTC_MMP_MARK(index, esd_recovery, 0, 4);
 
+#ifdef CONFIG_MI_DISP_ESD_CHECK
+	mtk_ddp_comp_io_cmd(output_comp, NULL, ESD_RESTORE_BACKLIGHT, NULL);
+#endif
+
 	mtk_crtc_hw_block_ready(crtc);
 	if (mtk_crtc_is_frame_trigger_mode(crtc)) {
 		struct cmdq_pkt *cmdq_handle;
@@ -574,11 +621,34 @@ static int mtk_drm_esd_recover(struct drm_crtc *crtc)
 	CRTC_MMP_MARK(index, esd_recovery, 0, 5);
 
 done:
+#ifdef CONFIG_MI_DISP_ESD_CHECK
+	atomic_set(&panel_dead, 0);
+#endif
 	CRTC_MMP_EVENT_END(index, esd_recovery, 0, ret);
 	mtk_drm_trace_end();
+#if IS_ENABLED(CONFIG_MIEV)
+	if (ESD_TYPE != 0)
+		mi_disp_mievent_recovery(ESD_TYPE);
+#endif
 
 	return 0;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 int mtk_drm_esd_testing_process(struct mtk_drm_esd_ctx *esd_ctx, bool need_lock)
 {
@@ -589,6 +659,9 @@ int mtk_drm_esd_testing_process(struct mtk_drm_esd_ctx *esd_ctx, bool need_lock)
 		int i = 0;
 		int recovery_flg = 0;
 		unsigned int crtc_idx = 0;
+#if IS_ENABLED(CONFIG_MIEV)
+		struct mi_event_info mi_event = {0};
+#endif
 
 		if (!esd_ctx) {
 			DDPPR_ERR("%s invalid ESD context, stop thread\n", __func__);
@@ -627,6 +700,10 @@ int mtk_drm_esd_testing_process(struct mtk_drm_esd_ctx *esd_ctx, bool need_lock)
 
 			DDPPR_ERR("[ESD%u]esd check fail, will do esd recovery. try=%d\n",
 				crtc_idx, i);
+#if IS_ENABLED(CONFIG_MIEV)
+			mi_event.event_type = MI_EVENT_PRI_PANEL_REG_ESD;
+			mi_disp_mievent_int(MI_DISP_PRIMARY, &mi_event);
+#endif
 			mtk_drm_esd_recover(crtc);
 			recovery_flg = 1;
 			mtk_drm_trace_end();

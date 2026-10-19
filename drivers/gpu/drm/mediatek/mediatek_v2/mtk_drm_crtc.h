@@ -32,6 +32,9 @@
 #include "mtk_disp_pmqos.h"
 #include "slbc_ops.h"
 #include "mtk_disp_pq_helper.h"
+#ifdef CONFIG_MI_DISP
+#include "mi_disp/mi_disp_esd_check.h"
+#endif
 
 #if IS_ENABLED(CONFIG_ARM64)
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK_AUTO_YCT)
@@ -1215,6 +1218,10 @@ struct mtk_drm_crtc {
 	bool skip_frame;
 	bool is_dsc_output_swap;
 
+#ifdef CONFIG_MI_DISP_ESD_CHECK
+	struct mi_esd_ctx *mi_esd_ctx;
+#endif
+
 	bool capturing;
 
 	int dli_relay_1tnp;
@@ -1620,6 +1627,7 @@ int mtk_drm_setbacklight_at_te(struct drm_crtc *crtc, unsigned int level,
 int mtk_drm_setbacklight_grp(struct drm_crtc *crtc, unsigned int level,
 			unsigned int panel_ext_param, unsigned int cfg_flag);
 void mtk_crtc_update_gce_event(struct mtk_drm_crtc *mtk_crtc);
+int mtk_drm_set_cabc_mode(struct drm_crtc *crtc, unsigned int mode);
 
 void mtk_addon_get_comp(struct drm_crtc *crtc, u32 addon, u32 *comp_id, u8 *layer_idx);
 void mtk_addon_set_comp(struct drm_crtc *crtc, u32 *addon, const u32 comp_id, const u8 layer_idx);

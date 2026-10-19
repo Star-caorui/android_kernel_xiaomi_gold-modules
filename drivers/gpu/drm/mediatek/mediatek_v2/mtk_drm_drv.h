@@ -163,7 +163,6 @@ enum drm_kernel_pm_status {
 struct mtk_drm_kernel_pm {
 	bool shutdown;
 	struct notifier_block nb;	/* Kernel suspend and resume event */
-	struct notifier_block vcp_nb;	/* VCP suspend and resume event */
 	struct mutex lock;		/* To block any request after kernel suspend */
 	atomic_t status;
 	atomic_t wakelock_cnt;
@@ -522,6 +521,8 @@ extern struct mtk_drm_disp_sec_cb disp_sec_cb;
 extern struct mtk_aod_scp_cb aod_scp_ipi;
 extern struct mtk_vdisp_funcs vdisp_func;
 extern struct mtk_drm_disp_mtee_cb disp_mtee_cb;
+extern atomic_t resume_pending;
+extern wait_queue_head_t resume_wait_q;
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK_EDPTX_AUTO_SUPPORT)
 extern struct platform_driver mtk_dvo_driver;
 #endif

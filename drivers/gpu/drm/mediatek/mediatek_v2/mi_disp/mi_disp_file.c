@@ -3,7 +3,7 @@
  * Copyright (c) 2020, The Linux Foundation. All rights reserved.
  * Copyright (C) 2020 XiaoMi, Inc.
  */
-#define pr_fmt(fmt) "mi_disp_file:[%s:%d] " fmt, __func__, __LINE__
+#define pr_fmt(fmt) "mi_disp_file: " fmt
 
 #include <linux/module.h>
 #include <linux/mutex.h>
@@ -216,7 +216,7 @@ static int mi_disp_ioctl_set_feature(struct disp_feature_client *client, void *d
 	struct disp_feature_req *req = data;
 	u32 disp_id = req->base.disp_id;
 	struct disp_display *dd_ptr = NULL;
-	struct disp_feature_ctl ctl;
+	static struct disp_feature_ctl ctl;
 	int ret = 0;
 
 	ret = mutex_lock_interruptible(&client->client_lock);
@@ -308,7 +308,9 @@ static int mi_disp_ioctl_set_local_hbm(
 		if (dd_ptr->intf_type == MI_INTF_DSI) {
 			DISP_INFO("%s display local_hbm_value = %s\n",
 				get_disp_id_name(disp_id), get_lhbm_value_name(local_hbm_value));
+#ifdef CONFIG_MI_DISP_LHBM
 				ret = mi_disp_set_local_hbm(disp_id, local_hbm_value);
+#endif
 		} else {
 			DISP_INFO("Unsupported display(%s intf)\n",
 				get_disp_intf_type_name(dd_ptr->intf_type));
@@ -445,6 +447,43 @@ static int mi_disp_ioctl_get_doze_brightness(
 		if (dd_ptr->intf_type == MI_INTF_DSI) {
 			ret = mi_dsi_display_get_doze_brightness(dd_ptr->display,
 					&req->doze_brightness);
+		} else {
+			DISP_INFO("Unsupported display(%s intf)\n",
+				get_disp_intf_type_name(dd_ptr->intf_type));
+			ret = -EINVAL;
+		}
+	} else {
+		DISP_INFO("Unsupported display id\n");
+		ret = -EINVAL;
+	}
+
+	mutex_unlock(&client->client_lock);
+	return ret;
+}
+
+static int mi_disp_ioctl_set_brightness(
+			struct disp_feature_client *client, void *data)
+{
+	struct disp_feature *df = client->df;
+	struct disp_brightness_req *req = data;
+	u32 disp_id = req->base.disp_id;
+	struct disp_display *dd_ptr = NULL;
+	static u32 brightness;
+	int ret = 0;
+
+	ret = mutex_lock_interruptible(&client->client_lock);
+	if (ret)
+		return ret;
+
+	brightness = req->brightness;
+
+	if (is_support_disp_id(disp_id)) {
+		dd_ptr = &df->d_display[disp_id];
+		if (dd_ptr->intf_type == MI_INTF_DSI) {
+			DISP_INFO("%s display brightness = %d\n",
+				get_disp_id_name(disp_id), brightness);
+			ret = mi_dsi_display_set_brightness(dd_ptr->display,
+					brightness);
 		} else {
 			DISP_INFO("Unsupported display(%s intf)\n",
 				get_disp_intf_type_name(dd_ptr->intf_type));
@@ -803,159 +842,6 @@ exit:
 	return ret;
 }
 
-static void mi_disp_ioctl_set_count_info_work_handler(struct kthread_work *work)
-{
-	struct disp_work *cur_work = container_of(work,
-					struct disp_work, work);
-	struct disp_display *dd_ptr = cur_work->dd_ptr;
-	struct disp_count_info *count_info = (struct disp_count_info *)cur_work->data;
-
-	mi_dsi_display_set_count_info(dd_ptr->display, count_info);
-
-	kfree(cur_work);
-}
-
-static int mi_disp_ioctl_set_count_info_queue_work(struct disp_display *dd_ptr,
-			void *data, u32 size)
-{
-	struct disp_work *cur_work;
-
-	cur_work = kzalloc(sizeof(struct disp_work) + size, GFP_ATOMIC);
-	if (!cur_work)
-		return -ENOMEM;
-
-	kthread_init_work(&cur_work->work, mi_disp_ioctl_set_count_info_work_handler);
-	cur_work->dd_ptr = dd_ptr;
-	cur_work->wq = &dd_ptr->pending_wq;
-	cur_work->data = (u8 *)cur_work + sizeof(struct disp_work);
-	memcpy(cur_work->data, data, size);
-
-	kthread_queue_work(&dd_ptr->d_thread.worker, &cur_work->work);
-
-	return 0;
-}
-
-static int mi_disp_ioctl_set_count_info(struct disp_feature_client *client, void *data)
-{
-	struct disp_feature *df = client->df;
-	struct disp_count_info_req *req = data;
-	u32 disp_id = req->base.disp_id;
-	struct disp_display *dd_ptr = NULL;
-	struct disp_count_info count_info;
-	int ret = 0;
-
-	ret = mutex_lock_interruptible(&client->client_lock);
-	if (ret)
-		return ret;
-
-	memset(&count_info, 0, sizeof(struct disp_count_info));
-
-	if (is_support_disp_id(disp_id)) {
-		dd_ptr = &df->d_display[disp_id];
-		if (dd_ptr->intf_type == MI_INTF_DSI) {
-			count_info.count_info_type = req->count_info_type;
-			count_info.count_info_val = req->count_info_val;
-
-			DISP_DEBUG("%s display set feature: %s, value: %d\n",
-				get_disp_id_name(disp_id),
-				get_disp_count_info_type_name(count_info.count_info_type), count_info.count_info_val);
-
-			if (is_support_disp_count_info_type(count_info.count_info_type)) {
-				if (req->tx_len) {
-					count_info.tx_len = req->tx_len;
-					count_info.tx_ptr = kzalloc(count_info.tx_len, GFP_KERNEL);
-					if (!count_info.tx_ptr) {
-						ret = -ENOMEM;
-						goto exit;
-					}
-					if (copy_from_user(count_info.tx_ptr, (void __user *)req->tx_ptr,
-						count_info.tx_len) != 0) {
-						ret = -EFAULT;
-						goto err_free_tx;
-					}
-				}
-				if (req->rx_len) {
-					count_info.rx_len = req->rx_len;
-					count_info.rx_ptr = kzalloc(count_info.rx_len, GFP_KERNEL);
-					if (!count_info.rx_ptr) {
-						ret = -ENOMEM;
-						goto err_free_tx;
-					}
-				}
-
-				if (req->base.flag == MI_DISP_FLAG_NONBLOCK) {
-					ret = mi_disp_ioctl_set_count_info_queue_work(dd_ptr, &count_info, sizeof(count_info));
-				} else {
-					ret = mi_dsi_display_set_count_info(dd_ptr->display, &count_info);
-				}
-
-				if (req->rx_len && !ret) {
-					if (copy_to_user((void __user *)req->rx_ptr, count_info.rx_ptr,
-						count_info.rx_len) != 0) {
-						ret = -EFAULT;
-						goto err_free_rx;
-					}
-				}
-			} else {
-				DISP_ERROR("unsupported disp count info type\n");
-				ret = -EINVAL;
-				goto exit;
-			}
-		} else {
-			DISP_INFO("Unsupported display(%s intf)\n",
-				get_disp_intf_type_name(dd_ptr->intf_type));
-			ret = -EINVAL;
-			goto exit;
-		}
-	} else {
-		DISP_INFO("Unsupported display id\n");
-		ret = -EINVAL;
-		goto exit;
-	}
-
-err_free_rx:
-	if (count_info.rx_len && count_info.rx_ptr)
-		kfree(count_info.rx_ptr);
-err_free_tx:
-	if (count_info.tx_len && count_info.tx_ptr)
-		kfree(count_info.tx_ptr);
-exit:
-	mutex_unlock(&client->client_lock);
-	return ret;
-}
-
-static int mi_disp_ioctl_set_fp_unlock_state(struct disp_feature_client *client, void *data) {
-	struct disp_feature *df = client->df;
-	struct disp_fingerprint_unlock_state *fp_state = data;
-	u32 disp_id = fp_state->base.disp_id;
-	struct disp_display *dd_ptr = NULL;
-	u32 fp_unlock_value;
-	int ret = 0;
-
-	ret = mutex_lock_interruptible(&client->client_lock);
-	if (ret)
-		return ret;
-
-	fp_unlock_value = fp_state->fp_unlock_value;
-
-	if (is_support_disp_id(disp_id)) {
-		dd_ptr = &df->d_display[disp_id];
-		if (dd_ptr->intf_type == MI_INTF_DSI) {
-			ret = mi_dsi_display_set_fp_unlock_state(dd_ptr->display, fp_unlock_value);
-		} else {
-			DISP_INFO("Unsupported display(%s intf)\n",
-				get_disp_intf_type_name(dd_ptr->intf_type));
-			ret = -EINVAL;
-		}
-	} else {
-		DISP_INFO("Unsupported display id\n");
-		ret = -EINVAL;
-	}
-
-	mutex_unlock(&client->client_lock);
-	return ret;
-}
-
 /* Ioctl table */
 static const struct disp_ioctl_desc disp_ioctls[] = {
 	DISP_IOCTL_DEF(MI_DISP_IOCTL_VERSION, mi_disp_ioctl_get_version),
@@ -969,10 +855,9 @@ static const struct disp_ioctl_desc disp_ioctls[] = {
 	DISP_IOCTL_DEF(MI_DISP_IOCTL_DEREGISTER_EVENT, mi_disp_ioctl_deregister_event),
 	DISP_IOCTL_DEF(MI_DISP_IOCTL_WRITE_DSI_CMD, mi_disp_ioctl_write_dsi_cmd),
 	DISP_IOCTL_DEF(MI_DISP_IOCTL_READ_DSI_CMD, mi_disp_ioctl_read_dsi_cmd),
+	DISP_IOCTL_DEF(MI_DISP_IOCTL_SET_BRIGHTNESS, mi_disp_ioctl_set_brightness),
 	DISP_IOCTL_DEF(MI_DISP_IOCTL_GET_BRIGHTNESS, mi_disp_ioctl_get_brightness),
 	DISP_IOCTL_DEF(MI_DISP_IOCTL_SET_LOCAL_HBM, mi_disp_ioctl_set_local_hbm),
-	DISP_IOCTL_DEF(MI_DISP_IOCTL_SET_COUNT_INFO, mi_disp_ioctl_set_count_info),
-	DISP_IOCTL_DEF(MI_DISP_IOCTL_SET_FP_UNLOCK_STATE, mi_disp_ioctl_set_fp_unlock_state),
 };
 
 #define DISP_IOCTL_COUNT	ARRAY_SIZE(disp_ioctls)
@@ -1002,7 +887,7 @@ long mi_disp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		out_size = 0;
 	ksize = max(max(in_size, out_size), drv_size);
 
-	pr_debug("pid=%d, %s\n", task_pid_nr(current), ioctl->name);
+	pr_info("pid=%d, %s\n", task_pid_nr(current), ioctl->name);
 
 	func = ioctl->func;
 

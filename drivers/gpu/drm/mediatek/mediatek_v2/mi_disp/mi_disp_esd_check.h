@@ -15,10 +15,6 @@ struct mi_esd_ctx {
 	int err_flag_irq_flags;
 	int err_flag_irq;
 	bool err_flag_enabled;
-	int err_flag_irq_gpio_second;
-	int err_flag_irq_flags_second;
-	int err_flag_irq_second;
-	bool err_flag_enabled_second;
 	bool panel_init;
 };
 

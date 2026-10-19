@@ -4,7 +4,7 @@
  * Copyright (C) 2020 XiaoMi, Inc.
  */
 
-#define pr_fmt(fmt) "mi_disp_log:[%s:%d] " fmt, __func__, __LINE__
+#define pr_fmt(fmt) "mi_disp_log: " fmt
 
 #include <linux/module.h>
 #include <linux/mutex.h>
@@ -48,9 +48,7 @@
 #ifdef CONFIG_MI_DISP_LHBM
 #include "mi_disp_lhbm.h"
 #endif
-#ifdef CONFIG_MI_HWCONF_MANAGER
 #include "mi_hwconf_manager.h"
-#endif
 
 struct disp_feature *g_disp_feature = NULL;
 

@@ -12,6 +12,7 @@
 
 #include <linux/types.h>
 #include <asm/ioctl.h>
+#include <linux/string.h>
 
 #if defined(__cplusplus)
 extern "C" {
@@ -63,15 +64,6 @@ enum disp_feature_id {
 	DISP_FEATURE_BIST_MODE_COLOR = 30,
 	DISP_FEATURE_ROUND_MODE = 31,
 	DISP_FEATURE_GAMUT = 32,
-	DISP_FEATURE_COLORMODE_NOTIFY = 33,
-	DISP_FEATURE_DOLBY_STATUS = 34,
-	DISP_FEATURE_FULLSCREEN_AOD_STATUS = 35,
-	DISP_FEATURE_APL_DIMMING = 36,
-	DISP_FEATURE_REPAINT_STATUS = 37,
-	DISP_FEATURE_VIDLE = 38,
-	DISP_FEATURE_LAYER_HAS_AOD = 39,
-	DISP_FEATURE_EARLY_SCREEN_STATUS = 40,
-	DISP_FEATURE_DYNAMIC_ELVSS_LEVEL = 41,
 	DISP_FEATURE_MAX,
 };
 
@@ -282,7 +274,6 @@ enum disp_event_type {
 	MI_DISP_EVENT_PANEL_DEAD = 9,
 	MI_DISP_EVENT_PANEL_EVENT = 10,
 	MI_DISP_EVENT_DDIC_RESOLUTION = 11,
-	MI_DISP_EVENT_FLAT_MODE = 12,
 	MI_DISP_EVENT_MAX,
 };
 
@@ -403,6 +394,14 @@ static inline int is_aod_brightness(__u32 doze_brightness)
 		return 0;
 }
 
+static inline int mi_get_disp_id(const char *type)
+{
+	if (!strncmp(type, "primary", 7))
+		return MI_DISP_PRIMARY;
+	else
+		return MI_DISP_SECONDARY;
+}
+
 static inline const char *get_doze_brightness_name(__u32 doze_brightness)
 {
 	switch (doze_brightness) {
@@ -460,8 +459,6 @@ static inline const char *get_disp_event_type_name(__u32 event_type)
 		return "panel_event";
 	case MI_DISP_EVENT_DDIC_RESOLUTION:
 		return "ddic_resolution";
-	case MI_DISP_EVENT_FLAT_MODE:
-		return "flat_mode";
 	default:
 		return "Unknown";
 	}
@@ -598,24 +595,6 @@ static inline const char *get_disp_feature_id_name(__u32 feature_id)
 		return "round_mode";
 	case DISP_FEATURE_GAMUT:
 		return "gamut";
-	case DISP_FEATURE_COLORMODE_NOTIFY:
-		return "colormode_notify";
-	case DISP_FEATURE_DOLBY_STATUS:
-		return "dolby_status";
-	case DISP_FEATURE_FULLSCREEN_AOD_STATUS:
-		return "fullscreen_aod_status";
-	case DISP_FEATURE_APL_DIMMING:
-		return "apl_dimming";
-	case DISP_FEATURE_REPAINT_STATUS:
-		return "repaint status";
-	case DISP_FEATURE_VIDLE:
-		return "vidle";
-	case DISP_FEATURE_LAYER_HAS_AOD:
-		return "layer_has_aod";
-	case DISP_FEATURE_EARLY_SCREEN_STATUS:
-		return "early_screen_status";
-	case DISP_FEATURE_DYNAMIC_ELVSS_LEVEL:
-		return "dynamic_elvss";
 	default:
 		return "Unknown";
 	}
@@ -759,8 +738,6 @@ static inline const char *getDispEventTypeName(__u32 event_type)
 		return "panel_event";
 	case MI_DISP_EVENT_DDIC_RESOLUTION:
 		return "ddic_resolution";
-	case MI_DISP_EVENT_FLAT_MODE:
-		return "flat_mode";
 	default:
 		return "Unknown";
 	}
@@ -897,24 +874,6 @@ static inline const char *getDispFeatureIdName(__u32 feature_id)
 		return "round_mode";
 	case DISP_FEATURE_GAMUT:
 		return "gamut";
-	case DISP_FEATURE_COLORMODE_NOTIFY:
-		return "colormode_notify";
-	case DISP_FEATURE_DOLBY_STATUS:
-		return "dolby_status";
-	case DISP_FEATURE_FULLSCREEN_AOD_STATUS:
-		return "fullscreen_aod_status";
-	case DISP_FEATURE_APL_DIMMING:
-		return "apl_dimming";
-	case DISP_FEATURE_REPAINT_STATUS:
-		return "repaint status";
-	case DISP_FEATURE_VIDLE:
-		return "vidle";
-	case DISP_FEATURE_LAYER_HAS_AOD:
-		return "layer_has_aod";
-	case DISP_FEATURE_EARLY_SCREEN_STATUS:
-		return "early_screen_status";
-	case DISP_FEATURE_DYNAMIC_ELVSS_LEVEL:
-		return "dynamic_elvss";
 	default:
 		return "Unknown";
 	}

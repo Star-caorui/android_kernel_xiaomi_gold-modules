@@ -30,7 +30,9 @@
 #endif
 #include "mtk_disp_dsc.h"
 #include "platform/mtk_drm_platform.h"
+#ifndef MIN
 #define MIN(X, Y) ((X) <= (Y) ? (X) : (Y))
+#endif
 
 #define DISP_REG_DSC_CON			0x0000
 	#define DSC_EN BIT(0)
@@ -651,6 +653,7 @@ static void mtk_dsc1_config(struct mtk_ddp_comp *comp,
 		hrd_delay = (rbs_min + ((bit_per_pixel/16) - 1)) / (bit_per_pixel/16);
 		dec_delay = hrd_delay - initial_xmit_delay;
 		xmit_delay = initial_xmit_delay;
+
 		if (dsc_param_load_mode == 1) {
 				reg_val = (xmit_delay);
 			if (dec_delay == 0)

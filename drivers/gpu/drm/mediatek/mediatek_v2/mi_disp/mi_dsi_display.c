@@ -4,7 +4,7 @@
  * Copyright (C) 2020 XiaoMi, Inc.
  */
 
-#define pr_fmt(fmt)	"mi-dsi-display:[%s] " fmt, __func__
+#define pr_fmt(fmt) "mi-dsi-display: " fmt
 
 #include <linux/list.h>
 #include <linux/of.h>
@@ -24,14 +24,6 @@
 #include "mi_dsi_panel.h"
 #include "mi_disp_print.h"
 //static atomic64_t g_param = ATOMIC64_INIT(0);
-
-int mi_get_disp_id(const char *display_type)
-{
-	if (!strncmp(display_type, "primary", 7))
-		return MI_DISP_PRIMARY;
-	else
-		return MI_DISP_SECONDARY;
-}
 
 static inline struct lcm *panel_to_lcm(struct drm_panel *panel)
 {
@@ -137,17 +129,6 @@ int mi_dsi_display_read_dsi_cmd(struct dsi_cmd_rw_ctl *ctl)
 	return 0;
 }
 
-ssize_t mi_dsi_display_led_i2c_setbacklight(void *display, unsigned int backlight)
-{
-	struct mtk_dsi *dsi = (struct mtk_dsi *)display;
-	if (!dsi) {
-		DISP_ERROR("Invalid display ptr\n");
-		return -EINVAL;
-	}
-
-	return led_i2c_set_backlight(dsi, backlight);
-}
-
 ssize_t mi_dsi_display_write_led_i2c_reg(void *display,
 			char *buf, size_t count)
 {
@@ -193,17 +174,6 @@ ssize_t mi_dsi_display_read_wp_info(void *display,
 		return -EINVAL;
 	}
 	return mi_dsi_panel_get_wp_info(dsi_display, buf, size);
-}
-
-ssize_t mi_dsi_display_read_sn_info(void *display,
-			char *buf, size_t size)
-{
-	struct mtk_dsi *dsi_display = (struct mtk_dsi *)display;
-	if (!dsi_display) {
-		pr_err("%s: dsi_display is NULL\n", __func__);
-		return -EINVAL;
-	}
-	return mi_dsi_panel_get_sn_info(dsi_display, buf, size);
 }
 
 
@@ -281,20 +251,6 @@ int mi_dsi_display_get_brightness(void *display,
 
 	return mi_dsi_panel_get_brightness(dsi_display,
 				brightness);
-}
-
-int mi_dsi_display_set_fp_unlock_state(void *display,
-			u32 fp_unlock_value)
-{
-	struct mtk_dsi *dsi_display = (struct mtk_dsi *)display;
-
-	if (!dsi_display) {
-		DISP_ERROR("Invalid display ptr\n");
-		return -EINVAL;
-	}
-
-	return mi_dsi_panel_set_fp_unlock_state(dsi_display,
-				fp_unlock_value);
 }
 
 int mi_dsi_display_set_brightness_clone(void *display,
@@ -446,18 +402,14 @@ ssize_t mi_dsi_display_get_disp_count(void *display, char* buf)
 	return 0;
 }
 
-int mi_dsi_display_set_count_info(void *display,
-			struct disp_count_info *count_info)
+int mi_dsi_display_get_cabc_mode(void *display, int *mode)
 {
 	struct mtk_dsi *dsi_display = (struct mtk_dsi *)display;
-	int ret = 0;
 
 	if (!dsi_display) {
 		DISP_ERROR("Invalid display ptr\n");
 		return -EINVAL;
 	}
 
-	ret = mi_dsi_panel_set_count_info(dsi_display, count_info);
-
-	return ret;
+	return mi_dsi_panel_get_cabc_mode(dsi_display, mode);
 }

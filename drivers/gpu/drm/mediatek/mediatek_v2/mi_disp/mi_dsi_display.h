@@ -17,14 +17,12 @@
 #include <drm/drm_connector.h>
 #include "mi_disp_feature.h"
 
-int mi_get_disp_id(const char *display_type);
 
 ssize_t dsi_display_get_disp_param(struct drm_connector *connector,
 			char *buf);
 ssize_t dsi_display_set_disp_param(struct drm_connector *connector,
 			u32 param_type);
 
-ssize_t mi_dsi_display_led_i2c_setbacklight(void *display, unsigned int backlight);
 
 ssize_t mi_dsi_display_write_led_i2c_reg(void *display,
 			char *buf, size_t count);
@@ -48,8 +46,6 @@ ssize_t mi_dsi_display_get_disp_param(void *display,
 
 ssize_t mi_dsi_display_read_wp_info(void *display,
 			char *buf, size_t size);
-ssize_t mi_dsi_display_read_sn_info(void *display,
-			char *buf, size_t size);
 ssize_t mi_dsi_display_read_grayscale_info(void *display,
 			char *buf, size_t size);
 
@@ -63,8 +59,6 @@ int mi_dsi_display_set_brightness(void *display, int doze_brightness);
 int mi_dsi_display_get_brightness(void *display,
 			u32 *brightness);
 
-int mi_dsi_display_set_fp_unlock_state(void *display,
-			u32 fp_unlock_value);
 
 int mi_dsi_display_write_mipi_reg(void *display, char *buf);
 
@@ -105,6 +99,6 @@ ssize_t mi_dsi_display_set_disp_count(void *display, char* buf);
 
 ssize_t mi_dsi_display_get_disp_count(void *display, char* buf);
 
-int mi_dsi_display_set_count_info(void *display,
-			struct disp_count_info *count_info);
+int mi_dsi_display_get_cabc_mode(void *display, int *mode);
+
 #endif /*_MI_DSI_DISPLAY_H_*/

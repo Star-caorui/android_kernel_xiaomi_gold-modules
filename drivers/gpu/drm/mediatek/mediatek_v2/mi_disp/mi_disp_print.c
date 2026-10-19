@@ -57,7 +57,7 @@ void mi_disp_printk_utc(const char *level, const char *format, ...)
 	vaf.fmt = format;
 	vaf.va = &args;
 
-	printk("%s" "[" DISP_NAME ":%ps][%ld-%02d-%02d %02d:%02d:%02d] %pV",
+	printk("%s" "[" DISP_NAME ":%ps][%d-%02d-%02d %02d:%02d:%02d] %pV",
 			level, __builtin_return_address(0),
 			tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
 			tm.tm_hour, tm.tm_min, tm.tm_sec,
@@ -65,7 +65,6 @@ void mi_disp_printk_utc(const char *level, const char *format, ...)
 
 	va_end(args);
 }
-EXPORT_SYMBOL(mi_disp_printk_utc);
 
 void mi_disp_dbg_utc(const char *format, ...)
 {
@@ -84,7 +83,7 @@ void mi_disp_dbg_utc(const char *format, ...)
 	vaf.fmt = format;
 	vaf.va = &args;
 
-	printk(KERN_DEBUG "[" DISP_NAME ":%ps][%ld-%02d-%02d %02d:%02d:%02d] %pV",
+	printk(KERN_DEBUG "[" DISP_NAME ":%ps][%d-%02d-%02d %02d:%02d:%02d] %pV",
 			 __builtin_return_address(0),
 			tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
 			tm.tm_hour, tm.tm_min, tm.tm_sec,

@@ -4,7 +4,7 @@
  * Copyright (C) 2020 XiaoMi, Inc.
  */
 
-#define pr_fmt(fmt) "mi_disp_log:[%s:%d] " fmt, __func__, __LINE__
+#define pr_fmt(fmt) "mi_disp_log: " fmt
 
 #include <linux/module.h>
 #include <linux/mutex.h>
