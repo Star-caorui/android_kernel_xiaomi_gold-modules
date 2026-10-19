@@ -75,7 +75,7 @@ static int mt_vibra_init_config(struct device *dev,
 		return ret;
 	}
 
-	pr_err("vibr_conf %u-%u\n",
+	pr_info("vibr_conf %u-%u\n",
 		vibr_conf->min_volt, vibr_conf->max_volt);
 
 	return ret;
