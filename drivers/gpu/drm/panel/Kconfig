@@ -171,6 +171,33 @@ config DRM_PANEL_HX_NT37701_DPHY_CMD_120HZ
 	  resolution and uses 24-bits RGB per pixel. It provides a
 	  MIPI DSI interface to host.
 
+config DRM_PANEL_N17_36_02_0A_DSC_VDO
+	tristate "Redmi Note 13 5G (gold) 36 02 0a FHD+ video mode panel"
+	depends on OF
+	depends on DRM_MIPI_DSI
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  Say Y here if you want to enable support for gold's 36 02 0a panel,
+	  with DSC and video mode, behind the MT6382 bridge.
+
+config DRM_PANEL_N17_36_0F_0C_DSC_VDO
+	tristate "Redmi Note 13 5G (gold) 36 0f 0c FHD+ video mode panel"
+	depends on OF
+	depends on DRM_MIPI_DSI
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  Say Y here if you want to enable support for gold's 36 0f 0c panel,
+	  with DSC and video mode, behind the MT6382 bridge.
+
+config DRM_PANEL_N17_42_0D_0B_DSC_VDO
+	tristate "Redmi Note 13 5G (gold) 42 0d 0b FHD+ video mode panel"
+	depends on OF
+	depends on DRM_MIPI_DSI
+	depends on BACKLIGHT_CLASS_DEVICE
+	help
+	  Say Y here if you want to enable support for gold's 42 0d 0b panel,
+	  with DSC and video mode, behind the MT6382 bridge.
+
 config DRM_PANEL_TRULY_TD4330_VDO
 	tristate "TRULY  FHD+ video mode panel"
 	depends on OF
