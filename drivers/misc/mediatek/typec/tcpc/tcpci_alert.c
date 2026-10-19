@@ -303,7 +303,7 @@ int tcpci_alert(struct tcpc_device *tcpc, bool masked)
 	if (rv < 0)
 		return rv;
 
-	TCPC_INFO("Alert:0x%04x, Mask:0x%04x\n", alert_status, alert_mask);
+	//TCPC_INFO("Alert:0x%04x, Mask:0x%04x\n", alert_status, alert_mask);
 
 	alert_status &= alert_mask;
 

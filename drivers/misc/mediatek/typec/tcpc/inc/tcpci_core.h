@@ -436,6 +436,11 @@ struct tcpc_device {
 	bool typec_vbus_to_cc_en;
 	bool cc_hidet_en;
 	int cc_hi;
+	/*
+	 * gold: set by the gauge while the screen is off and no audio plays;
+	 * the port goes back to sink only when it is unplugged
+	 */
+	bool screen_and_audio_off;
 };
 
 #define to_tcpc_device(obj) container_of(obj, struct tcpc_device, dev)

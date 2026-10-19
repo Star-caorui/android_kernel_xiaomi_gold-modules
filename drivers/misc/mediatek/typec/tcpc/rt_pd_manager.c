@@ -219,6 +219,16 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 					   __func__, ret);
 			}
 		}
+		/* gold: with the screen off and no audio, no more DRP */
+		if ((old_state != TYPEC_UNATTACHED) &&
+		    (new_state == TYPEC_UNATTACHED) &&
+		    (rpmd->tcpc[idx]->screen_and_audio_off == true)) {
+			dev_info(rpmd->dev,
+				 "%s tcpc plugout with screen and audio off\n",
+				 __func__);
+			tcpm_typec_change_role_postpone(rpmd->tcpc[idx],
+							TYPEC_ROLE_SNK, true);
+		}
 		break;
 	case TCP_NOTIFY_PR_SWAP:
 		dev_info(rpmd->dev, "%s power role swap, new role = %d\n",
