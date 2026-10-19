@@ -398,6 +398,40 @@ static int mtk_set_hw_brightness(struct mt_led_data *led_dat, int brightness,
 	return 0;
 }
 
+/*
+ * A panel comes up at zero brightness every time its display is powered up,
+ * and a level set while the display is off is dropped by the display driver.
+ * The display driver calls this once a display is on again: send each
+ * backlight the level it is set to now.
+ */
+void mtk_leds_restore_brightness(void)
+{
+	struct mt_led_data *led_dat;
+	int i, level;
+
+	if (IS_ERR_OR_NULL(leds_info))
+		return;
+
+	for (i = 0; i < leds_info->lens; i++) {
+		if (IS_ERR_OR_NULL(leds_info->leds[i]))
+			continue;
+		led_dat = container_of(leds_info->leds[i], struct mt_led_data, desp);
+		mutex_lock(&led_dat->led_access);
+		level = led_dat->conf.aal_enable ? led_dat->last_hw_brightness :
+			brightness_maptolevel(&led_dat->conf, led_dat->conf.cdev.brightness);
+		/*
+		 * What the panel has now is not what was last sent. Under
+		 * led_access, as mtk_set_brightness() sends a level, so that a
+		 * level the framework sets meanwhile is not overwritten by an
+		 * older one.
+		 */
+		led_dat->hw_brightness = -1;
+		mtk_set_hw_brightness(led_dat, level, 0, 1 << SET_BACKLIGHT_LEVEL);
+		mutex_unlock(&led_dat->led_access);
+	}
+}
+EXPORT_SYMBOL_GPL(mtk_leds_restore_brightness);
+
 int mtk_leds_brightness_set(int connector_id, int level,
 		unsigned int params, unsigned int params_flag)
 {

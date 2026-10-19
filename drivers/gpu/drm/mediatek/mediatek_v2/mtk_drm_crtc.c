@@ -28,6 +28,9 @@
 #include <linux/kmemleak.h>
 #include <linux/time.h>
 #include <linux/math64.h>
+#ifdef CONFIG_LEDS_MTK_MODULE
+#include <linux/leds-mtk.h>
+#endif
 #include "mtk-mmdvfs-debug.h"
 
 #ifndef DRM_CMDQ_DISABLE
@@ -13412,6 +13415,21 @@ static void mtk_set_dpc_dsi_clk(struct mtk_drm_crtc *mtk_crtc, bool enable)
 	DDPMSG("crtc%d %s set %d\n", id, __func__, value);
 }
 
+/*
+ * The panel comes back at zero brightness every time the display is enabled
+ * again, and a backlight level set while it was off was dropped: have the LED
+ * driver send its current level once the display is on. From a work item, as
+ * setting the backlight takes the CRTC lock that the enable path holds. Not
+ * on the first enable, where the bootloader hands over a lit panel.
+ */
+static void mtk_drm_restore_backlight_work(struct work_struct *work)
+{
+#ifdef CONFIG_LEDS_MTK_MODULE
+	mtk_leds_restore_brightness();
+#endif
+}
+static DECLARE_WORK(mtk_drm_restore_backlight, mtk_drm_restore_backlight_work);
+
 void mtk_drm_crtc_enable(struct drm_crtc *crtc)
 {
 	struct mtk_drm_crtc *mtk_crtc = NULL;
@@ -13718,6 +13736,9 @@ void mtk_drm_crtc_enable(struct drm_crtc *crtc)
 			mtk_drm_switch_spr(crtc, 1, 0);
 		}
 	}
+
+	if (crtc_id == 0)
+		schedule_work(&mtk_drm_restore_backlight);
 
 end:
 	CRTC_MMP_EVENT_END((int) crtc_id, enable,
