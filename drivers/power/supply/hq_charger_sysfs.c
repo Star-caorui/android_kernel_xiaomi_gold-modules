@@ -690,14 +690,48 @@ static int sysfs_setup_files(struct sysfs_desc *desc)
 static enum power_supply_property usb_psy_properties[] = {
 	POWER_SUPPLY_PROP_ONLINE,
 	POWER_SUPPLY_PROP_TYPE,
+	POWER_SUPPLY_PROP_VOLTAGE_MAX,
+	POWER_SUPPLY_PROP_CURRENT_MAX,
 };
+
+/*
+ * What the charger gives now, for Android's charging speed: the PD
+ * contract (with PPS, what PE5 last asked for), else 5 V (9 V on HVDCP)
+ * at the main charger's input current limit. Nothing while the primary
+ * charger is offline, or before the driver has looked everything up.
+ */
+static void usb_psy_get_power(struct sysfs_desc *desc, int *uv, int *ua)
+{
+	union power_supply_propval online = { 0 };
+	struct mtk_charger *info = desc->info;
+	int mv = 0, ma = 0;
+	u32 aicr = 0;
+
+	*uv = 0;
+	*ua = 0;
+	if (!info || !desc->primary_psy ||
+	    power_supply_get_property(desc->primary_psy,
+				      POWER_SUPPLY_PROP_ONLINE, &online) ||
+	    !online.intval)
+		return;
+	if (desc->tcpc &&
+	    tcpm_inquire_pd_contract(desc->tcpc, &mv, &ma) == TCPM_SUCCESS &&
+	    mv > 0 && ma > 0) {
+		*uv = mv * 1000;
+		*ua = ma * 1000;
+		return;
+	}
+	*uv = info->chr_type == POWER_SUPPLY_TYPE_USB_ACA ? 9000000 : 5000000;
+	if (charger_dev_get_input_current(info->chg1_dev, &aicr) == 0)
+		*ua = aicr;
+}
 
 static int psy_usb_get_property(struct power_supply *psy,
 				enum power_supply_property psp,
 				union power_supply_propval *val)
 {
 	union power_supply_propval online;
-	int ret;
+	int ret, unused;
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_ONLINE:
@@ -712,6 +746,12 @@ static int psy_usb_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_TYPE:
 		val->intval = psy->desc->type;
+		break;
+	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
+		usb_psy_get_power(power_supply_get_drvdata(psy), &val->intval, &unused);
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_MAX:
+		usb_psy_get_power(power_supply_get_drvdata(psy), &unused, &val->intval);
 		break;
 	default:
 		return -EINVAL;
