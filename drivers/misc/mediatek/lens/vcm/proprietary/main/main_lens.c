@@ -79,6 +79,8 @@ static struct stAF_OisPosInfo OisPosInfo;
 /* ------------------------- */
 
 static struct stAF_DrvList g_stAF_DrvList[MAX_NUM_OF_LENS] = {
+	{1, AFDRV_DW9800VAF, DW9800VAF_SetI2Cclient, DW9800VAF_Ioctl,
+	 DW9800VAF_Release, DW9800VAF_GetFileName, NULL},
 	{1, AFDRV_DW9718TAF, DW9718TAF_SetI2Cclient, DW9718TAF_Ioctl,
 	 DW9718TAF_Release, DW9718TAF_GetFileName, NULL},
 	{1, AFDRV_GT9772AF, GT9772AF_SetI2Cclient, GT9772AF_Ioctl,
@@ -168,7 +170,7 @@ static struct pinctrl *vcamaf_pio;
 static struct pinctrl_state *vcamaf_pio_on;
 static struct pinctrl_state *vcamaf_pio_off;
 
-#define CAMAF_PMIC     "vio28"
+#define CAMAF_PMIC     "camaf_m1_pmic"
 #define CAMAF_GPIO_ON  "camaf_m1_gpio_on"
 #define CAMAF_GPIO_OFF "camaf_m1_gpio_off"
 
