@@ -4,6 +4,7 @@
  * Author: Iris-SC Yang <iris-sc.yang@mediatek.com>
  */
 #include <linux/time.h>
+#include <linux/delay.h>
 
 #include <media/v4l2-device.h>
 #include <media/v4l2-mem2mem.h>
@@ -23,6 +24,9 @@ module_param(m2m_max_cache_task, int, 0644);
 
 int m2m_max_cache_cfg = 2;
 module_param(m2m_max_cache_cfg, int, 0644);
+
+int m2m_frame_done_delay_ms;
+module_param(m2m_frame_done_delay_ms, int, 0644);
 
 struct mml_v4l2_dev {
 	struct v4l2_device v4l2_dev;
@@ -94,6 +98,8 @@ static void m2m_param_queue(struct mml_m2m_ctx *ctx)
 	struct mml_m2m_param *param;
 
 	param = kzalloc(sizeof(*param), GFP_KERNEL);
+	if (!param)
+		return;
 	*param = ctx->param;
 	mutex_lock(&ctx->param_mutex);
 	list_add_tail(&param->entry, &ctx->params);
@@ -115,34 +121,26 @@ static void m2m_param_remove(struct mml_m2m_ctx *ctx)
 
 static void m2m_task_submit_done(struct mml_task *task)
 {
-	struct mml_ctx *ctx = task->ctx;
-	struct mml_m2m_ctx *mctx = container_of(ctx, struct mml_m2m_ctx, ctx);
-	struct vb2_v4l2_buffer *src_buf, *dst_buf;
+	struct mml_m2m_ctx *mctx = container_of(task->ctx, struct mml_m2m_ctx, ctx);
 	struct mml_v4l2_dev *v4l2_dev = mml_get_v4l2_dev(mctx->ctx.mml);
+	u32 jobid = task->job.jobid;
 
+	/* note that m2m task is not queued to worker so we do not need to get mctx here */
 	mml_trace_ex_begin("%s", __func__);
 	m2m_param_remove(mctx);
-
-	src_buf = v4l2_m2m_src_buf_remove(mctx->m2m_ctx);
-	dst_buf = v4l2_m2m_dst_buf_remove(mctx->m2m_ctx);
-	if (!src_buf ||!dst_buf) {
-		mml_err("[m2m]%s no src or dst buffer found", __func__);
-		return;
-	}
-	src_buf->sequence = mctx->frame_count[MML_M2M_FRAME_SRC]++;
-	dst_buf->sequence = mctx->frame_count[MML_M2M_FRAME_DST]++;
-	v4l2_m2m_buf_copy_metadata(src_buf, dst_buf, true);
 	v4l2_m2m_job_finish(v4l2_dev->m2m_dev, mctx->m2m_ctx);
 	task_submit_done(task);
 	mml_trace_ex_end();
+	mml_mmp(m2m_submit_done, MMPROFILE_FLAG_PULSE, jobid, 0);
 }
 
-static void mml_m2m_process_done(enum vb2_buffer_state vb_state, struct mml_task *task)
+static void mml_m2m_process_done(struct mml_task *task, enum vb2_buffer_state vb_state)
 {
 	v4l2_m2m_buf_done(task->src_buf, vb_state);
-	task->src_buf = NULL;
 	v4l2_m2m_buf_done(task->dst_buf, vb_state);
+	task->src_buf = NULL;
 	task->dst_buf = NULL;
+	mml_mmp(m2m_process_done, MMPROFILE_FLAG_PULSE, task->job.jobid, 0);
 }
 
 static void m2m_task_frame_done(struct mml_task *task)
@@ -216,7 +214,14 @@ static void m2m_task_frame_done(struct mml_task *task)
 done:
 	mutex_unlock(&ctx->config_mutex);
 
+	if (unlikely(m2m_frame_done_delay_ms)) {
+		mml_msg("[m2m] before frame done delay %dms on ctx %p",
+			m2m_frame_done_delay_ms, mctx);
+		msleep_interruptible(m2m_frame_done_delay_ms);
+	}
+
 	/* kref_get mctx->ref in mml_m2m_device_run */
+	mml_msg("[m2m]%s put ctx %p", __func__, mctx);
 	kref_put(&mctx->ref, m2m_ctx_complete);
 
 	mml_lock_wake_lock(mml, false);
@@ -226,14 +231,14 @@ done:
 
 static void m2m_task_signal_irq(struct mml_task *task)
 {
-	struct mml_frame_config *cfg = task->config;
+	enum vb2_buffer_state vb_state = VB2_BUF_STATE_DONE;
 
 	mml_msg("[m2m]%s signal user done job id %u", __func__, task->job.jobid);
 	mml_trace_ex_begin("%s_%u", __func__, task->job.jobid);
-	if (unlikely(!task->pkts[0] || (cfg->dual && !task->pkts[1])))
-		mml_m2m_process_done(VB2_BUF_STATE_ERROR, task);
-	else
-		mml_m2m_process_done(VB2_BUF_STATE_DONE, task);
+	if (unlikely(!task->pkts[0] || (task->config->dual && !task->pkts[1])))
+		vb_state = VB2_BUF_STATE_ERROR;
+	/* notice buffer done to v4l2 */
+	mml_m2m_process_done(task, vb_state);
 	mml_trace_ex_end();
 	mml_mmp(m2m_sig, MMPROFILE_FLAG_PULSE, task->job.jobid, 0);
 }
@@ -1091,19 +1096,19 @@ static void v4l_fill_mtk_fmtdesc(struct v4l2_fmtdesc *fmt)
 
 	switch (fmt->pixelformat) {
 	case V4L2_PIX_FMT_NV12_HYFBC:
-		descr = "Mediatek hybrid compressed NV12 Y/UV 4:2:0"; break;
+		descr = "MTK compressed NV12 Y/UV 4:2:0"; break;
 	case V4L2_PIX_FMT_P010_HYFBC:
-		descr = "Mediatek hybrid compressed P010 10-bit Y/UV 4:2:0"; break;
+		descr = "MTK compressed P010 Y/UV 4:2:0"; break;
 	case V4L2_PIX_FMT_RGB32_AFBC:
-		descr = "Arm compressed 32-bit A/XRGB 8-8-8-8"; break;
+		descr = "Arm compressed A/XRGB 8-8-8-8"; break;
 	case V4L2_PIX_FMT_RGBA1010102_AFBC:
-		descr = "Arm compressed 32-bit RGBA 10-10-10-2"; break;
+		descr = "Arm compressed RGBA 10-10-10-2"; break;
 	case V4L2_PIX_FMT_NV12_AFBC:
 		descr = "Arm compressed NV12 Y/UV 4:2:0"; break;
 	case V4L2_PIX_FMT_NV12_10B_AFBC:
 		descr = "Arm compressed 10-bit NV12"; break;
 	case V4L2_PIX_FMT_YVU420A:
-		descr = "Planar YVU 4:2:0 16-pixel stride"; break;
+		descr = "Planar YVU 4:2:0 16-byte stride"; break;
 	}
 
 	if (descr)
@@ -1623,6 +1628,7 @@ static int mml_m2m_release(struct file *file)
 		v4l2_fh_exit(&ctx->fh);
 		mutex_unlock(&v4l2_dev->m2m_mutex);
 
+		mml_msg("[m2m]%s put ctx %p", __func__, ctx);
 		kref_put(&ctx->ref, m2m_ctx_complete);
 		wait_for_completion(&ctx->destroy);
 		m2m_ctx_destroy(ctx);
@@ -1809,13 +1815,16 @@ static void mml_m2m_device_run(void *priv)
 	/* hold mctx to avoid release from v4l2 before call submit_done */
 	kref_get(&mctx->ref);
 
-	src_buf = v4l2_m2m_next_src_buf(mctx->m2m_ctx);
-	dst_buf = v4l2_m2m_next_dst_buf(mctx->m2m_ctx);
+	src_buf = v4l2_m2m_src_buf_remove(mctx->m2m_ctx);
+	dst_buf = v4l2_m2m_dst_buf_remove(mctx->m2m_ctx);
 	if (!src_buf || !dst_buf) {
 		mml_err("[m2m]%s get next buf fail src %p dst %p", __func__,
 			src_buf, dst_buf);
 		goto err_buf_exit;
 	}
+	src_buf->sequence = mctx->frame_count[MML_M2M_FRAME_SRC]++;
+	dst_buf->sequence = mctx->frame_count[MML_M2M_FRAME_DST]++;
+	v4l2_m2m_buf_copy_metadata(src_buf, dst_buf, true);
 
 	result = m2m_set_submit(mctx, submit);
 	if (result < 0)
@@ -1960,6 +1969,7 @@ static void mml_m2m_device_run(void *priv)
 	}
 
 	/* note that m2m task is not queued to another thread so we can put mctx here */
+	mml_msg("[m2m]%s put ctx %p", __func__, mctx);
 	kref_put(&mctx->ref, m2m_ctx_complete);
 
 	mml_trace_end();
@@ -1987,7 +1997,8 @@ err_buf_exit:
 			mml_log("dec config %p", cfg);
 
 		mutex_unlock(&ctx->config_mutex);
-		mml_m2m_process_done(vb_state, task);
+
+		mml_m2m_process_done(task, vb_state);
 		kref_put(&task->ref, task_move_to_destroy);
 
 		if (is_init_state)

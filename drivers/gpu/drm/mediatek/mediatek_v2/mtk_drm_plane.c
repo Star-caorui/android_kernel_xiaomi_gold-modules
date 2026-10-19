@@ -195,7 +195,7 @@ static void mtk_plane_reset(struct drm_plane *plane)
 
 	/* Linux alpha property use 16 bit to convey alpha value, so set default to 0xFFFF */
 	plane->state->alpha = DRM_BLEND_ALPHA_OPAQUE;
-#if !IS_ENABLED(CONFIG_DRM_MEDIATEK_AUTO_YCT)
+#if !IS_ENABLED(CONFIG_DRM_MEDIATEK_AUTO)
 	plane->state->pixel_blend_mode = DRM_MODE_BLEND_PIXEL_NONE;
 #else
 	plane->state->pixel_blend_mode = DRM_MODE_BLEND_PREMULTI;
@@ -587,6 +587,7 @@ static void mtk_plane_atomic_update(struct drm_plane *plane,
 
 		if (priv && (priv->data->mmsys_id != MMSYS_MT6768 &&
 			priv->data->mmsys_id != MMSYS_MT6761 &&
+			priv->data->mmsys_id != MMSYS_MT6765 &&
 			priv->data->mmsys_id != MMSYS_MT6877) &&
 			mtk_plane_state->comp_state.layer_caps & MTK_DISP_RSZ_LAYER) {
 			mtk_plane_state->pending.dst_roi = crtc_state->rsz_dst_roi.width |

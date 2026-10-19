@@ -1397,6 +1397,8 @@ static void mtk_ddp_comp_set_larb(struct device *dev, struct device_node *node,
 		goto err_larb;
 
 	for (i = 0; i < count; i++) {
+		bool linked = type != MTK_OVL_EXDMA;
+
 		ret = of_parse_phandle_with_fixed_args(node, "mediatek,larb", 1, i, &larb_args);
 		if (ret) {
 			DDPMSG("%s %s failed to parse\n", __func__, mtk_dump_comp_str(comp));
@@ -1417,7 +1419,8 @@ static void mtk_ddp_comp_set_larb(struct device *dev, struct device_node *node,
 
 		larb_devs[i] = &larb_pdev->dev;
 
-		device_link_add(dev, larb_devs[i], DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS);
+		if (linked)
+			device_link_add(dev, larb_devs[i], DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS);
 
 		/* MTK_M4U_TO_LARB(M4U_PORT_L21_DISP_OVL0_2L_RDMA1) = 21 */
 		larb_ids[i] = MTK_M4U_TO_LARB(larb_args.args[0]);
@@ -1425,8 +1428,8 @@ static void mtk_ddp_comp_set_larb(struct device *dev, struct device_node *node,
 			res.start + MTK_M4U_TO_PORT(larb_args.args[0]) * 4 + SMI_LARB_NON_SEC_CON;
 
 		DDPMSG("i=%d 0x%pa\n", i, &larb_cons[i]);
-		DDPMSG("%s: %s need larb device, smi-id:%d\n",
-			__func__, mtk_dump_comp_str(comp), larb_ids[i]);
+		DDPMSG("%s: %s need larb device, smi-id:%d linked:%u\n",
+			__func__, mtk_dump_comp_str(comp), larb_ids[i], linked);
 	}
 	comp->larb_devs = larb_devs;
 	comp->larb_ids = larb_ids;
@@ -3134,6 +3137,9 @@ void mt6989_mtk_sodi_config(struct drm_device *drm, enum mtk_ddp_comp_id id,
 			v = (v & ~(MT6989_OVL_SODI_REQ_VAL));
 			writel_relaxed(v, priv->ovlsys1_regs + MMSYS_SODI_REQ_MASK);
 		}
+
+		if (priv->data->mmsys_id == MMSYS_MT6899 && priv->side_config_regs)
+			writel_relaxed(0x13, priv->side_config_regs + MMSYS1_BUF_UNDERRUN_ID0);
 	} else {
 		/* 0xF4/0xF8: config on DISPSYS(HARD CODE) */
 		cmdq_pkt_write(handle, NULL, priv->config_regs_pa +
@@ -3167,6 +3173,9 @@ void mt6989_mtk_sodi_config(struct drm_device *drm, enum mtk_ddp_comp_id id,
 			cmdq_pkt_write(handle, NULL, priv->ovlsys1_regs_pa +
 				MMSYS_SODI_REQ_MASK, 0, MT6989_OVL_SODI_REQ_VAL);
 		}
+		if (priv->data->mmsys_id == MMSYS_MT6899 && priv->side_config_regs_pa)
+			cmdq_pkt_write(handle, NULL, priv->side_config_regs_pa +
+				MMSYS1_BUF_UNDERRUN_ID0, 0x13, ~0);
 	}
 }
 

@@ -640,13 +640,6 @@ struct mtk_oddmr_panelid {
 	uint8_t data[16];
 };
 
-enum ddic_cabc_status {
-	DDIC_CABC_OFF = 0,
-	DDIC_CABC_UI_ON = 1,
-	DDIC_CABC_STILL_ON = 2,
-	DDIC_CABC_MOVIE_ON = 3,
-};
-
 struct mtk_panel_funcs {
 	int (*set_bl_elvss_cmdq)(void *dsi_drv, dcs_grp_write_gce cb,
 		void *handle, struct mtk_bl_ext_config *bl_ext_config);
@@ -767,10 +760,6 @@ struct mtk_panel_funcs {
 	void (*lcm_valid_roi)(struct mtk_panel_params *ext_param,
 		unsigned int *x, unsigned int *y, unsigned int *w, unsigned int *h);
 	int (*get_lcm_power_state)(struct drm_panel *panel);
-	int (*set_cabc_mode)(struct drm_panel *panel, void *dsi_drv, dcs_write_gce cb,
-		void *handle, unsigned int mode);
-
-	int (*get_cabc_mode)(struct drm_panel *panel, unsigned int *mode);
 };
 
 void mtk_panel_init(struct mtk_panel_ctx *ctx);

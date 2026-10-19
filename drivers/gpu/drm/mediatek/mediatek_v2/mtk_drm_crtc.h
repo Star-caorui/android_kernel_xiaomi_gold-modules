@@ -893,7 +893,7 @@ struct mtk_crtc_se_plane {
 	struct mtk_plane_state state;
 };
 
-#define MTK_FB_SE_NUM 3
+#define MTK_FB_SE_NUM 6
 
 enum DISP_SE_STATE {
 	DISP_SE_IDLE,
@@ -1298,6 +1298,7 @@ struct mtk_crtc_state {
 	/* property */
 	uint64_t prop_val[CRTC_PROP_MAX];
 	bool doze_changed;
+	bool disp_mode_changed;
 };
 
 struct mtk_cmdq_cb_data {
@@ -1345,6 +1346,7 @@ void mtk_drm_crtc_plane_disable(struct drm_crtc *crtc, struct drm_plane *plane,
 void mtk_drm_crtc_mini_dump(struct drm_crtc *crtc);
 void mtk_drm_crtc_dump(struct drm_crtc *crtc);
 void mtk_drm_crtc_mini_analysis(struct drm_crtc *crtc);
+void mtk_drm_crtc_dump_vr_rg(struct drm_crtc *crtc);
 void mtk_drm_crtc_analysis(struct drm_crtc *crtc);
 void mtk_drm_crtc_diagnose(void);
 bool mtk_crtc_is_frame_trigger_mode(struct drm_crtc *crtc);
@@ -1540,6 +1542,8 @@ dma_addr_t mtk_get_gce_backup_slot_pa(struct mtk_drm_crtc *mtk_crtc,
 unsigned int mtk_get_plane_slot_idx(struct mtk_drm_crtc *mtk_crtc, unsigned int idx);
 void mtk_gce_backup_slot_init(struct mtk_drm_crtc *mtk_crtc);
 
+u16 mtk_get_gpr(struct mtk_drm_crtc *mtk_crtc, struct cmdq_pkt *handle);
+
 void mtk_crtc_mml_racing_resubmit(struct drm_crtc *crtc, struct cmdq_pkt *_cmdq_handle);
 void mtk_crtc_mml_racing_stop_sync(struct drm_crtc *crtc, struct cmdq_pkt *_cmdq_handle,
 				   bool force);
@@ -1616,8 +1620,6 @@ int mtk_drm_setbacklight_at_te(struct drm_crtc *crtc, unsigned int level,
 int mtk_drm_setbacklight_grp(struct drm_crtc *crtc, unsigned int level,
 			unsigned int panel_ext_param, unsigned int cfg_flag);
 void mtk_crtc_update_gce_event(struct mtk_drm_crtc *mtk_crtc);
-int mtk_drm_crtc_set_cabc_mode(struct drm_crtc *crtc, unsigned int mode,
-	unsigned int panel_ext_param, unsigned int cfg_flag, unsigned int lock);
 
 void mtk_addon_get_comp(struct drm_crtc *crtc, u32 addon, u32 *comp_id, u8 *layer_idx);
 void mtk_addon_set_comp(struct drm_crtc *crtc, u32 *addon, const u32 comp_id, const u8 layer_idx);

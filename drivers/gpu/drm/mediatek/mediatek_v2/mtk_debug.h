@@ -49,8 +49,6 @@ enum MTK_DRM_DEBUG_LOG_SWITCH_OPS {
 };
 
 extern int mtk_disp_hrt_bw_dbg(void);
-int mtk_disp_set_cabc_mode(unsigned int mode);
-int mtk_disp_get_cabc_mode(unsigned int *mode);
 
 struct cb_data_store {
 	struct cmdq_cb_data data;

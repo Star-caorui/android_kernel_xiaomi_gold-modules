@@ -31,6 +31,9 @@
 //#define DRM_OVL_SELF_PATTERN
 //#define MTK_DSI1_SUPPORT_DSC1
 //#define MTK_DSI2_SUPPORT_R2Y0
+#if IS_ENABLED(CONFIG_MTK_LK_NO_DISPLAY)
+#define CONFIG_MTK_DISP_NO_LK
+#endif
 
 #define MTK_DRM_FENCE_SUPPORT
 #if IS_ENABLED(CONFIG_MTK_CMDQ_MBOX_EXT)
@@ -160,6 +163,7 @@ enum drm_kernel_pm_status {
 struct mtk_drm_kernel_pm {
 	bool shutdown;
 	struct notifier_block nb;	/* Kernel suspend and resume event */
+	struct notifier_block vcp_nb;	/* VCP suspend and resume event */
 	struct mutex lock;		/* To block any request after kernel suspend */
 	atomic_t status;
 	atomic_t wakelock_cnt;

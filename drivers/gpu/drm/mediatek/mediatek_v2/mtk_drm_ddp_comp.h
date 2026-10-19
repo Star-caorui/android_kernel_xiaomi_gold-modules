@@ -94,6 +94,7 @@ struct drm_crtc_state;
 
 #define MMSYS_DUMMY0 0x0400
 #define DISP_REG_CONFIG_MMSYS_MISC                0x0F0
+#define MMSYS1_BUF_UNDERRUN_ID0                   0x0BA4
 
 #define SODI_HRT_FIFO_SEL                         REG_FLD_MSB_LSB(3, 0)
 	#define SODI_HRT_FIFO_SEL_DISP0_PD_MODE       REG_FLD_MSB_LSB(0, 0)
@@ -959,8 +960,6 @@ enum mtk_ddp_io_cmd {
 	DSI_SET_BL,
 	DSI_SET_BL_AOD,
 	DSI_SET_BL_GRP,
-	DSI_SET_CABC_MODE,
-	DSI_GET_CABC_MODE,
 	DSI_SET_BL_ELVSS,
 	DSI_SET_PANEL_SPR,
 	DSI_READ_ELVSS_BASE_VOLTAGE,

@@ -55,14 +55,6 @@
 #include "mtk_mipi_tx.h"
 
 
-#ifdef CONFIG_MI_DISP
-#include <uapi/drm/mi_disp.h>
-#endif
-
-#if IS_ENABLED(CONFIG_MIEV)
-#include "mi_disp/mi_disp_event.h"
-#endif
-
 #if IS_ENABLED(CONFIG_MTK_MME_SUPPORT)
 #include "mmevent_function.h"
 #endif
@@ -193,14 +185,6 @@ unsigned int g_trace_log = 1;
 static bool logger_enable;
 unsigned int g_trace_log;
 #endif
-
-struct esd_recovery_data {
-	unsigned int level;
-	unsigned int panel_ext_param;
-	unsigned int cfg_flag;
-};
-
-static struct esd_recovery_data g_esd_restore_data;
 
 struct DISP_PANEL_BASE_VOLTAGE base_volageg;
 #if IS_ENABLED(POLLING_RDMA_OUTPUT_LINE_ENABLE)
@@ -662,65 +646,6 @@ void mtk_dump_mminfra_ck(void *_priv)
 	}
 }
 
-extern int mtk_drm_crtc_set_cabc_mode(struct drm_crtc *crtc, unsigned int mode,
-	unsigned int panel_ext_param, unsigned int cfg_flag, unsigned int lock);
-int mtk_disp_set_cabc_mode(unsigned int mode)
-{
-	struct drm_crtc *crtc;
-	int ret = 0;
-
-	if (IS_ERR_OR_NULL(drm_dev)) {
-		DDPPR_ERR("%s, invalid drm dev\n", __func__);
-		return -EINVAL;
-	}
-	DDPINFO("%s-%d entern, cabc mode==%d\n", __func__, __LINE__, mode);
-	/* this debug cmd only for crtc0 */
-	crtc = list_first_entry(&(drm_dev)->mode_config.crtc_list,
-			typeof(*crtc), head);
-	if (IS_ERR_OR_NULL(crtc)) {
-		DDPPR_ERR("%s failed to find crtc\n", __func__);
-		return -EINVAL;
-	}
-	ret = mtk_drm_crtc_set_cabc_mode(crtc, mode, 0, (0X1<<SET_BACKLIGHT_LEVEL), 0);
-	DDPINFO("%s-%d exit, ret=%d\n", __func__, __LINE__, ret);
-	return ret;
-}
-
-int mtk_disp_get_cabc_mode(unsigned int *mode)
-{
-	struct drm_crtc *crtc;
-	struct mtk_ddp_comp *comp;
-	struct mtk_drm_crtc *mtk_crtc;
-
-	if (IS_ERR_OR_NULL(drm_dev)) {
-		DDPPR_ERR("%s, invalid drm dev\n", __func__);
-		return -EINVAL;
-	}
-
-	DDPINFO("%s-%d entern.\n", __func__, __LINE__);
-
-	/* this debug cmd only for crtc0 */
-	crtc = list_first_entry(&(drm_dev)->mode_config.crtc_list,
-			typeof(*crtc), head);
-	if (IS_ERR_OR_NULL(crtc)) {
-		DDPPR_ERR("%s failed to find crtc\n", __func__);
-		return -EINVAL;
-	}
-
-	mtk_crtc = to_mtk_crtc(crtc);
-	comp = mtk_ddp_comp_request_output(mtk_crtc);
-
-	if (!(comp && comp->funcs && comp->funcs->io_cmd)) {
-		DDPPR_ERR("cannot find output component\n");
-		return -EINVAL;
-	}
-
-	comp->funcs->io_cmd(comp, NULL, DSI_GET_CABC_MODE, mode);
-	DDPINFO("%s-%d exit, current cabc mode is %d\n", __func__, __LINE__, *mode);
-
-	return 0;
-}
-
 int mtkfb_set_backlight_level_AOD(unsigned int level)
 {
 	struct drm_crtc *crtc;
@@ -743,20 +668,6 @@ int mtkfb_set_backlight_level_AOD(unsigned int level)
 	return ret;
 }
 EXPORT_SYMBOL(mtkfb_set_backlight_level_AOD);
-
-static struct esd_recovery_data* get_esd_restore_data(void)
-{
-	return &g_esd_restore_data;
-}
-
-void set_esd_restore_data(unsigned int level, unsigned int panel_ext_param,
-			       unsigned int cfg_flag)
-{
-	struct esd_recovery_data* esd_restore_data = get_esd_restore_data();
-	esd_restore_data->level = level;
-	esd_restore_data->panel_ext_param = panel_ext_param;
-	esd_restore_data->cfg_flag = cfg_flag;
-}
 
 int __mtkfb_set_backlight_level(unsigned int level, unsigned int panel_ext_param,
 			       unsigned int cfg_flag, bool group)
@@ -781,8 +692,6 @@ int __mtkfb_set_backlight_level(unsigned int level, unsigned int panel_ext_param
 	else
 		ret = mtk_drm_setbacklight(crtc, level, panel_ext_param, cfg_flag, 1);
 
-	set_esd_restore_data(level, panel_ext_param, cfg_flag);
-
 	return ret;
 }
 
@@ -792,17 +701,6 @@ int mtkfb_set_backlight_level(unsigned int level, unsigned int panel_ext_param,
 	return __mtkfb_set_backlight_level(level, panel_ext_param, cfg_flag, false);
 }
 EXPORT_SYMBOL(mtkfb_set_backlight_level);
-
-int esd_recover_set_backlight_level(void)
-{
-	struct esd_recovery_data* esd_restore_data = get_esd_restore_data();
-
-	DDPINFO("[%s]: level = %d, panel_ext_param = %d, cfg_flag = %d", 
-		__func__, esd_restore_data->level, esd_restore_data->panel_ext_param, esd_restore_data->cfg_flag);
-
-	return mtkfb_set_backlight_level(esd_restore_data->level, esd_restore_data->panel_ext_param, esd_restore_data->cfg_flag);
-}
-EXPORT_SYMBOL(esd_recover_set_backlight_level);
 
 int mtk_drm_set_conn_backlight_level(unsigned int conn_id, unsigned int level,
 				unsigned int panel_ext_param, unsigned int cfg_flag)
@@ -1664,10 +1562,6 @@ int mtk_ddic_dsi_read_cmd(struct mtk_ddic_dsi_msg *cmd_msg)
 	int index = 0;
 	int ret = 0;
 
-#if IS_ENABLED(CONFIG_MIEV)
-	struct mi_event_info mi_event = {0};
-#endif
-
 	if (IS_ERR_OR_NULL(drm_dev)) {
 		DDPPR_ERR("%s, invalid drm dev\n", __func__);
 		return -EINVAL;
@@ -1680,10 +1574,6 @@ int mtk_ddic_dsi_read_cmd(struct mtk_ddic_dsi_msg *cmd_msg)
 			typeof(*crtc), head);
 	if (IS_ERR_OR_NULL(crtc)) {
 		DDPPR_ERR("find crtc fail\n");
-#if IS_ENABLED(CONFIG_MIEV)
-		mi_event.event_type = MI_EVENT_CMD_RECEIVE_FAILED;
-		mi_disp_mievent_int(MI_DISP_PRIMARY, &mi_event);
-#endif
 		return -EINVAL;
 	}
 
@@ -1703,10 +1593,6 @@ int mtk_ddic_dsi_read_cmd(struct mtk_ddic_dsi_msg *cmd_msg)
 		DDP_MUTEX_UNLOCK(&mtk_crtc->lock, __func__, __LINE__);
 		DDP_COMMIT_UNLOCK(&private->commit.lock, __func__, __LINE__);
 		CRTC_MMP_EVENT_END(index, ddic_read_cmd, 0, 1);
-#if IS_ENABLED(CONFIG_MIEV)
-		mi_event.event_type = MI_EVENT_CMD_RECEIVE_FAILED;
-		mi_disp_mievent_int(MI_DISP_PRIMARY, &mi_event);
-#endif
 		return -EINVAL;
 	} else if (mtk_crtc->ddp_mode == DDP_NO_USE) {
 		DDPMSG("skip %s, ddp_mode: NO_USE\n",
@@ -1714,10 +1600,6 @@ int mtk_ddic_dsi_read_cmd(struct mtk_ddic_dsi_msg *cmd_msg)
 		DDP_MUTEX_UNLOCK(&mtk_crtc->lock, __func__, __LINE__);
 		DDP_COMMIT_UNLOCK(&private->commit.lock, __func__, __LINE__);
 		CRTC_MMP_EVENT_END(index, ddic_read_cmd, 0, 2);
-#if IS_ENABLED(CONFIG_MIEV)
-		mi_event.event_type = MI_EVENT_CMD_RECEIVE_FAILED;
-		mi_disp_mievent_int(MI_DISP_PRIMARY, &mi_event);
-#endif
 		return -EINVAL;
 	}
 
@@ -1727,10 +1609,6 @@ int mtk_ddic_dsi_read_cmd(struct mtk_ddic_dsi_msg *cmd_msg)
 		DDP_MUTEX_UNLOCK(&mtk_crtc->lock, __func__, __LINE__);
 		DDP_COMMIT_UNLOCK(&private->commit.lock, __func__, __LINE__);
 		CRTC_MMP_EVENT_END(index, ddic_read_cmd, 0, 3);
-#if IS_ENABLED(CONFIG_MIEV)
-		mi_event.event_type = MI_EVENT_CMD_RECEIVE_FAILED;
-		mi_disp_mievent_int(MI_DISP_PRIMARY, &mi_event);
-#endif
 		return -EINVAL;
 	}
 
@@ -1752,12 +1630,7 @@ int mtk_ddic_dsi_read_cmd(struct mtk_ddic_dsi_msg *cmd_msg)
 	DDP_MUTEX_UNLOCK(&mtk_crtc->lock, __func__, __LINE__);
 	DDP_COMMIT_UNLOCK(&private->commit.lock, __func__, __LINE__);
 	CRTC_MMP_EVENT_END(index, ddic_read_cmd, (unsigned long)crtc, 4);
-#if IS_ENABLED(CONFIG_MIEV)
-	if(ret != 0){
-		mi_event.event_type = MI_EVENT_CMD_RECEIVE_FAILED;
-		mi_disp_mievent_int(MI_DISP_PRIMARY, &mi_event);
-	}
-#endif
+
 	return ret;
 }
 

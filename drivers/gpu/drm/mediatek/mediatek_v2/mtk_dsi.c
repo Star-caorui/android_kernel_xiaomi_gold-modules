@@ -39,14 +39,6 @@
 #include <uapi/linux/sched/types.h>
 #endif
 
-#ifdef CONFIG_MI_DISP
-#include <uapi/drm/mi_disp.h>
-#endif
-
-#if IS_ENABLED(CONFIG_MIEV)
-#include "mi_disp/mi_disp_event.h"
-#endif
-
 #include "mtk_drm_ddp_comp.h"
 #include "mtk_drm_crtc.h"
 #include "mtk_drm_drv.h"
@@ -466,223 +458,6 @@ enum DSI_MODE_CON {
 	MODE_CON_SYNC_EVENT_VDO,
 	MODE_CON_BURST_VDO,
 };
-
-
-struct LCM_setting_table {
-	unsigned cmd;
-	unsigned char count;
-	unsigned char para_list[64];
-};
-
-struct LCM_mipi_read_write {
-	unsigned int read_enable;
-	unsigned int read_count;
-	unsigned char read_buffer[64];
-	struct LCM_setting_table lcm_setting_table;
-};
-static struct LCM_mipi_read_write lcm_mipi_read_write ={0};
-
-static char string_to_hex(const char *str)
-{
-	char val_l = 0;
-	char val_h = 0;
-
-	if (str[0] >= '0' && str[0] <= '9')
-		val_h = str[0] - '0';
-	else if (str[0] <= 'f' && str[0] >= 'a')
-		val_h = 10 + str[0] - 'a';
-	else if (str[0] <= 'F' && str[0] >= 'A')
-		val_h = 10 + str[0] - 'A';
-
-	if (str[1] >= '0' && str[1] <= '9')
-		val_l = str[1]-'0';
-	else if (str[1] <= 'f' && str[1] >= 'a')
-		val_l = 10 + str[1] - 'a';
-	else if (str[1] <= 'F' && str[1] >= 'A')
-		val_l = 10 + str[1] - 'A';
-
-	return (val_h << 4) | val_l;
-}
-
-static int string_merge_into_buf(const char *str, int len, char *buf)
-{
-	int buf_size = 0;
-	int i = 0;
-	const char *p = str;
-
-	while (i < len) {
-		if (((p[0] >= '0' && p[0] <= '9') ||
-			(p[0] <= 'f' && p[0] >= 'a') ||
-			(p[0] <= 'F' && p[0] >= 'A'))
-			&& ((i + 1) < len)) {
-			buf[buf_size] = string_to_hex(p);
-			pr_debug("0x%02x ", buf[buf_size]);
-			buf_size++;
-			i += 2;
-			p += 2;
-		} else {
-			i++;
-			p++;
-		}
-	}
-	return buf_size;
-}
-
-long lcm_mipi_reg_write(char *buf, size_t count)
-{
-	int retval = 0;
-	int dlen = 0;
-	unsigned int read_enable = 0;
-	unsigned int packet_count = 0;
-	unsigned int register_value = 0;
-	char *input = NULL;
-	char *data = NULL;
-	unsigned char pbuf[3] = {0};
-	u8 tx[10] = {0};
-	unsigned int  i = 0, j = 0;
-	struct mtk_ddic_dsi_msg *cmd_msg =
-		vmalloc(sizeof(struct mtk_ddic_dsi_msg));
-	pr_info("[%s+]: mipi_write_date source: count = %d,buf = %s\n", __func__, (int)count, buf);
-
-	input = buf;
-	memcpy(pbuf, input, 2);
-	pbuf[2] = '\0';
-	retval = kstrtou32(pbuf, 10, &read_enable);
-	if (retval) {
-		pr_err("[%s]: kstrtou32 error.\n", __func__);
-		goto exit;
-	}
-	lcm_mipi_read_write.read_enable = !!read_enable;
-	input = input + 3;
-	memcpy(pbuf, input, 2);
-	pbuf[2] = '\0';
-	packet_count = (unsigned int)string_to_hex(pbuf);
-	if (lcm_mipi_read_write.read_enable && !packet_count) {
-		retval = -EINVAL;
-		pr_err("[%s]: string_to_hex error.", __func__);
-		goto exit;
-	}
-
-	input = input + 3;
-	memcpy(pbuf, input, 2);
-	pbuf[2] = '\0';
-	register_value = (unsigned int)string_to_hex(pbuf);
-	lcm_mipi_read_write.lcm_setting_table.cmd = register_value;
-
-	if(lcm_mipi_read_write.read_enable) {
-		lcm_mipi_read_write.read_count = packet_count;
-
-		cmd_msg->channel = 0;
-		cmd_msg->tx_cmd_num = 1;
-		cmd_msg->type[0] = 0x06;
-		tx[0] = lcm_mipi_read_write.lcm_setting_table.cmd;
-		cmd_msg->tx_buf[0] = tx;
-		cmd_msg->tx_len[0] = 1;
-
-		cmd_msg->rx_cmd_num = 1;
-		cmd_msg->rx_buf[0] = lcm_mipi_read_write.read_buffer;
-		memset(cmd_msg->rx_buf[0], 0, lcm_mipi_read_write.read_count);
-		cmd_msg->rx_len[0] = lcm_mipi_read_write.read_count;
-
-		retval = mtk_ddic_dsi_read_cmd(cmd_msg);
-		if (retval != 0) {
-			pr_err("mipi %s error\n", __func__);
-		}
-
-		pr_info("mipi read lcm addr:%pad--dlen:%d\n",
-			&(*(char *)(cmd_msg->tx_buf[0])), (int)cmd_msg->rx_len[0]);
-		for (j = 0; j < cmd_msg->rx_len[0]; j++) {
-			pr_info("mipi read lcm addr:%pad--byte:%d,val:%pad\n",
-				&(*(char *)(cmd_msg->tx_buf[0])), j,
-				&(*(char *)(cmd_msg->rx_buf[0] + j)));
-		}
-		goto exit;
-	} else {
-		lcm_mipi_read_write.lcm_setting_table.count = (unsigned char)packet_count;
-		memset(lcm_mipi_read_write.lcm_setting_table.para_list, 0x0, 64);
-		if(count > 8)
-		{
-			data = kzalloc(count - 6, GFP_KERNEL);
-			if (!data) {
-				retval = -ENOMEM;
-				pr_info("%s->%d+\n", __func__, i++);
-				goto exit;
-			}
-			data[count-6-1] = '\0';
-			//input = input + 3;
-			dlen = string_merge_into_buf(input, count-6, data);
-			memcpy(lcm_mipi_read_write.lcm_setting_table.para_list, data, dlen);
-
-			cmd_msg->channel = packet_count;
-			cmd_msg->flags = MIPI_DSI_MSG_USE_LPM;
-			cmd_msg->tx_cmd_num = 1;
-			cmd_msg->type[0] = 0x39;
-
-			if (2 == dlen) {
-				cmd_msg->type[0] = 0x15;
-			} else if (1 == dlen) {
-				cmd_msg->type[0] = 0x05;
-			}
-
-			cmd_msg->tx_buf[0] = data;
-			cmd_msg->tx_len[0] = dlen;
-			for (i = 0; i < (int)cmd_msg->tx_cmd_num; i++) {
-				pr_info("mipi send lcm tx_len[%d]=%d\n",
-					i, (int)cmd_msg->tx_len[i]);
-				for (j = 0; j < (int)cmd_msg->tx_len[i]; j++) {
-					pr_info(
-						"mipi send lcm type[%d]=0x%x, tx_buf[%d]--byte:%d,val:%pad\n",
-						i, cmd_msg->type[i], i, j,
-						&(*(char *)(cmd_msg->tx_buf[i] + j)));
-				}
-			}
-
-			mtk_ddic_dsi_send_cmd(cmd_msg, true);
-		}
-	}
-
-	pr_info("[%s]: mipi_write done!\n", __func__);
-	pr_info("[%s]: mipi write cmd = %x,len = %d\n", __func__,lcm_mipi_read_write.lcm_setting_table.cmd, lcm_mipi_read_write.lcm_setting_table.count);
-	pr_info("[%s]: mipi_write data len = %d: ", __func__, count - 3);
-	for(i=0; i<count-3; i++)
-	{
-		pr_info("%d -> 0x%x ", i, lcm_mipi_read_write.lcm_setting_table.para_list[i]);
-	}
-	pr_info("\n");
-
-	if(count > 8)
-	{
-		kfree(data);
-	}
-exit:
-	retval = count;
-	vfree(cmd_msg);
-	return retval;
-}
-EXPORT_SYMBOL(lcm_mipi_reg_write);
-
-long  lcm_mipi_reg_read(char *buf)
-{
-	int i = 0;
-	ssize_t count = 0;
-
-	pr_info("%s+\n", __func__);
-
-	if (lcm_mipi_read_write.read_enable) {
-		for (i = 0; i < lcm_mipi_read_write.read_count; i++) {
-			if (i ==  lcm_mipi_read_write.read_count - 1) {
-				count += snprintf(buf + count, PAGE_SIZE - count, "0x%02x\n",
-				     lcm_mipi_read_write.read_buffer[i]);
-			} else {
-				count += snprintf(buf + count, PAGE_SIZE - count, "0x%02x ",
-				     lcm_mipi_read_write.read_buffer[i]);
-			}
-		}
-	}
-	return count;
-}
-EXPORT_SYMBOL(lcm_mipi_reg_read);
-
 static struct mtk_drm_property mtk_connector_property[CONNECTOR_PROP_MAX] = {
 	{DRM_MODE_PROP_IMMUTABLE, "CAPS_BLOB_ID", 0, ULONG_MAX, 0},
 	{DRM_MODE_PROP_ATOMIC, "CSC_BL", 0, ULONG_MAX, 0},
@@ -3864,52 +3639,6 @@ static void mtk_dsi_cmdq_size_sel(struct mtk_dsi *dsi)
 	mtk_dsi_mask(dsi, DSI_CMDQ_CON(dsi->driver_data), CMDQ_SIZE_SEL, CMDQ_SIZE_SEL);
 }
 
-u16 mtk_get_gpr(struct mtk_ddp_comp *comp, struct cmdq_pkt *handle)
-{
-	struct mtk_drm_crtc *mtk_crtc = comp->mtk_crtc;
-	struct drm_crtc *crtc;
-	struct cmdq_client *client_dsi;
-	struct cmdq_client *client_trig_loop;
-	unsigned int mmsys_id;
-
-	if (!mtk_crtc || !handle)
-		return CMDQ_GPR_R07;
-
-	crtc = &mtk_crtc->base;
-	client_dsi = mtk_crtc->gce_obj.client[CLIENT_DSI_CFG];
-	client_trig_loop = mtk_crtc->gce_obj.client[CLIENT_TRIG_LOOP];
-	mmsys_id = mtk_get_mmsys_id(crtc);
-
-	switch (mmsys_id) {
-	case MMSYS_MT6983:
-	case MMSYS_MT6985:
-	case MMSYS_MT6989:
-	case MMSYS_MT6899:
-	case MMSYS_MT6897:
-	case MMSYS_MT6879:
-	case MMSYS_MT6895:
-	case MMSYS_MT6886:
-	case MMSYS_MT6835:
-	case MMSYS_MT6855:
-		if (handle->cl == (void *)client_dsi)
-			return ((drm_crtc_index(crtc) == 0) ? CMDQ_GPR_R03 : CMDQ_GPR_R05);
-		else
-			return ((drm_crtc_index(crtc) == 0) ? CMDQ_GPR_R04 : CMDQ_GPR_R06);
-	case MMSYS_MT6991:
-		if (handle->cl == (void *)client_dsi)
-			return ((drm_crtc_index(crtc) == 0) ? CMDQ_GPR_R03 : CMDQ_GPR_R05);
-		else if (handle->cl == (void *)client_trig_loop)
-			return CMDQ_GPR_R07;
-		else
-			return ((drm_crtc_index(crtc) == 0) ? CMDQ_GPR_R04 : CMDQ_GPR_R06);
-	default:
-		if (handle->cl == (void *)client_dsi)
-			return CMDQ_GPR_R14;
-		else
-			return CMDQ_GPR_R07;
-	}
-}
-
 static void mtk_dsi_cmdq_poll(struct mtk_ddp_comp *comp,
 			      struct cmdq_pkt *handle, unsigned int reg,
 			      unsigned int val, unsigned int mask)
@@ -3919,7 +3648,7 @@ static void mtk_dsi_cmdq_poll(struct mtk_ddp_comp *comp,
 	if (handle == NULL)
 		DDPPR_ERR("%s no cmdq handle\n", __func__);
 
-	gpr = mtk_get_gpr(comp, handle);
+	gpr = mtk_get_gpr(comp->mtk_crtc, handle);
 
 	cmdq_pkt_poll_timeout(handle, val, SUBSYS_NO_SUPPORT,
 				  reg, mask, 0xFFFF, gpr);
@@ -3980,7 +3709,7 @@ static void mtk_dsi_power_keep_gce(struct mtk_dsi *dsi, struct cmdq_pkt *cmdq_ha
 
 	if (keep)
 		mtk_vidle_user_power_keep_by_gce(DISP_VIDLE_USER_DDIC_CMDQ, cmdq_handle,
-						 mtk_get_gpr(&dsi->ddp_comp, cmdq_handle));
+						 mtk_get_gpr(mtk_crtc, cmdq_handle));
 	else
 		mtk_vidle_user_power_release_by_gce(DISP_VIDLE_USER_DDIC_CMDQ, cmdq_handle);
 }
@@ -4239,7 +3968,7 @@ void mtk_dsi_cur_pos_dump(struct mtk_ddp_comp *comp)
 
 	dsi = container_of(comp, struct mtk_dsi, ddp_comp);
 	reg_val = readl(DSI_INPUT_DBG(dsi->driver_data) + baddr);
-	DDPINFO("%s cur_pos(%u,%u)\n", mtk_dump_comp_str(comp),
+	DDPMSG("%s cur_pos(%u,%u)\n", mtk_dump_comp_str(comp),
 		REG_FLD_VAL_GET(DSI_DBG_FLD_ROI_X, reg_val),
 		REG_FLD_VAL_GET(DSI_DBG_FLD_ROI_Y, reg_val));
 }
@@ -4277,10 +4006,6 @@ irqreturn_t mtk_dsi_irq_status(int irq, void *dev_id)
 	struct drm_crtc *crtc = NULL;
 	struct mtk_ddp_comp *comp = NULL;
 	unsigned int irq_mask = 0;
-
-#if IS_ENABLED(CONFIG_MIEV)
-	struct mi_event_info mi_event = {0};
-#endif
 
 	if (IS_ERR_OR_NULL(dsi) || IS_ERR_OR_NULL(dsi->driver_data)) {
 		DDPPR_ERR("%s:%d NULL Pointer\n", __func__, __LINE__);
@@ -4363,12 +4088,9 @@ irqreturn_t mtk_dsi_irq_status(int irq, void *dev_id)
 					    (aee_now_ts - mtk_crtc->last_aee_trigger_ts > TIGGER_INTERVAL_S(10));
 			int underrun_int_en = 0;
 
-#if IS_ENABLED(CONFIG_MIEV)
-			mi_event.event_type = MI_EVENT_PANEL_UNDERRUN;
-			mi_disp_mievent_int(MI_DISP_PRIMARY, &mi_event);
-#endif
-
 			dump_cur_pos(mtk_crtc);
+			if (dsi->encoder.crtc)
+				mtk_drm_crtc_dump_vr_rg(dsi->encoder.crtc);
 
 			if (aee_cooldown && !dsi_underrun_called) {
 				dsi_underrun_called = 1;
@@ -5915,7 +5637,6 @@ static void mtk_output_dsi_enable(struct mtk_dsi *dsi,
 	if (!mtk_crtc || !mtk_state || !priv || !crtc) {
 		DDPPR_ERR("Fail to get mtk_crtc, mtk_state, priv or crtc, %s,%d\n",
 			__FILE__, __LINE__);
-		mtk_dsi_dump(&dsi->ddp_comp);
 		return;
 	}
 
@@ -5923,7 +5644,6 @@ static void mtk_output_dsi_enable(struct mtk_dsi *dsi,
 		crtc_idx = drm_crtc_index(crtc);
 		if (priv && crtc_idx < MAX_CRTC && priv->usage[crtc_idx] == DISP_OPENING) {
 			DDPINFO("%s %d skip due to still opening\n", __func__, crtc_idx);
-			mtk_dsi_dump(&dsi->ddp_comp);
 			return;
 		}
 	}
@@ -6090,14 +5810,12 @@ static void mtk_output_dsi_enable(struct mtk_dsi *dsi,
 
 out:
 	mtk_vidle_force_power_ctrl_by_cpu(false);
-	mtk_dsi_dump(&dsi->ddp_comp);
 	return;
 
 err_dsi_power_off:
 	mtk_dsi_stop(dsi);
 	mtk_dsi_poweroff(dsi);
 	mtk_vidle_force_power_ctrl_by_cpu(false);
-	mtk_dsi_dump(&dsi->ddp_comp);
 }
 
 static int mtk_dsi_stop_vdo_mode(struct mtk_dsi *dsi, void *handle);
@@ -13532,31 +13250,6 @@ static int mtk_dsi_io_cmd(struct mtk_ddp_comp *comp, struct cmdq_pkt *handle,
 					handle, *(int *)params);
 	}
 		break;
-
-	case DSI_SET_CABC_MODE:
-	{
-		struct mtk_dsi *dsi =
-			container_of(comp, struct mtk_dsi, ddp_comp);
-
-		panel_ext = mtk_dsi_get_panel_ext(comp);
-		if (panel_ext && panel_ext->funcs
-			&& panel_ext->funcs->set_cabc_mode)
-			panel_ext->funcs->set_cabc_mode(dsi->panel,dsi,
-					mipi_dsi_dcs_write_gce, handle,
-					*(unsigned int *)params);
-	}
-		break;
-
-	case DSI_GET_CABC_MODE:
-	{
-		panel_ext = mtk_dsi_get_panel_ext(comp);
-		if (panel_ext && panel_ext->funcs
-			&& panel_ext->funcs->get_cabc_mode)
-			panel_ext->funcs->get_cabc_mode(dsi->panel,
-					(unsigned int *)params);
-	}
-		break;
-
 	case DSI_SET_BL_ELVSS:
 	{
 		struct mtk_dsi *dsi =
@@ -14624,9 +14317,6 @@ static int mtk_dsi_bind(struct device *dev, struct device *master, void *data)
 	return 0;
 
 err_unregister:
-#if IS_ENABLED(CONFIG_MIEV)
-	mi_disp_mievent_str(MI_EVENT_DSI_ERROR);
-#endif
 	mipi_dsi_host_unregister(&dsi->host);
 	mtk_ddp_comp_unregister(drm, &dsi->ddp_comp);
 	return ret;
@@ -15180,6 +14870,7 @@ static const struct of_device_id mtk_dsi_of_match[] = {
 	{.compatible = "mediatek,mt6879-dsi", .data = &mt6879_dsi_driver_data},
 	{.compatible = "mediatek,mt6855-dsi", .data = &mt6855_dsi_driver_data},
 	{.compatible = "mediatek,mt6835-dsi", .data = &mt6835_dsi_driver_data},
+	{.compatible = "mediatek,mt6771-dsi", .data = &mt6885_dsi_driver_data},
 	{},
 };
 
@@ -15210,17 +14901,11 @@ static int mtk_dsi_probe(struct platform_device *pdev)
 	ret = mipi_dsi_host_register(&dsi->host);
 	if (ret < 0) {
 		dev_err(dev, "failed to register DSI host: %d\n", ret);
-#if IS_ENABLED(CONFIG_MIEV)
-		mi_disp_mievent_str(MI_EVENT_DSI_ERROR);
-#endif
 		return -EPROBE_DEFER;
 	}
 	of_id = of_match_device(mtk_dsi_of_match, &pdev->dev);
 	if (!of_id) {
 		dev_err(dev, "DSI device match failed\n");
-#if IS_ENABLED(CONFIG_MIEV)
-		mi_disp_mievent_str(MI_EVENT_DSI_ERROR);
-#endif
 		return -EPROBE_DEFER;
 	}
 
@@ -15233,9 +14918,6 @@ static int mtk_dsi_probe(struct platform_device *pdev)
 			if (!remote_node) {
 				dev_err(dev, "No panel connected\n");
 				ret = -ENODEV;
-#if IS_ENABLED(CONFIG_MIEV)
-			  goto error_;
-#endif
 				goto error;
 			}
 
@@ -15443,10 +15125,6 @@ static int mtk_dsi_probe(struct platform_device *pdev)
 	return ret;
 
 error:
-#if IS_ENABLED(CONFIG_MIEV)
-	mi_disp_mievent_str(MI_EVENT_PANEL_HW_RESOURCE_GET_FAILED);
-error_:
-#endif
 	mipi_dsi_host_unregister(&dsi->host);
 	return -EPROBE_DEFER;
 }

@@ -35,22 +35,12 @@
 #include "mtk_disp_bdg.h"
 #include "mtk_dsi.h"
 
-#ifdef CONFIG_MI_DISP
-#include <uapi/drm/mi_disp.h>
-#endif
-
-#if IS_ENABLED(CONFIG_MIEV)
-#include "mi_disp/mi_disp_event.h"
-#endif
-
 #define ESD_TRY_CNT 5
 #define ESD_CHK_TRY_CNT 5
 #define ESD_CHECK_PERIOD 2000 /* ms */
 #define esd_timer_to_mtk_crtc(x) container_of(x, struct mtk_drm_crtc, esd_timer)
 
 static DEFINE_MUTEX(pinctrl_lock);
-
-extern int esd_recover_set_backlight_level(void);
 
 /* pinctrl implementation */
 long _set_state(struct drm_crtc *crtc, const char *name)
@@ -469,11 +459,6 @@ static int mtk_drm_esd_check(struct drm_crtc *crtc)
 
 done:
 	CRTC_MMP_EVENT_END(index, esd_check, esd_ctx->chk_retry, ret);
-#if IS_ENABLED(CONFIG_MIEV)
-	if (ESD_TYPE != 0) {
-		mi_disp_mievent_recovery(ESD_TYPE);
-	}
-#endif
 	mtk_drm_trace_end();
 	return ret;
 }
@@ -604,7 +589,6 @@ int mtk_drm_esd_testing_process(struct mtk_drm_esd_ctx *esd_ctx, bool need_lock)
 		int i = 0;
 		int recovery_flg = 0;
 		unsigned int crtc_idx = 0;
-		int esd_recovery_backlight_flg = 0;
 
 		if (!esd_ctx) {
 			DDPPR_ERR("%s invalid ESD context, stop thread\n", __func__);
@@ -645,7 +629,6 @@ int mtk_drm_esd_testing_process(struct mtk_drm_esd_ctx *esd_ctx, bool need_lock)
 				crtc_idx, i);
 			mtk_drm_esd_recover(crtc);
 			recovery_flg = 1;
-			esd_recovery_backlight_flg = 1;
 			mtk_drm_trace_end();
 		} while (++i < ESD_TRY_CNT);
 
@@ -665,16 +648,11 @@ int mtk_drm_esd_testing_process(struct mtk_drm_esd_ctx *esd_ctx, bool need_lock)
 			recovery_flg = 0;
 			atomic_set(&mtk_crtc->esd_notice_status, 0);
 		}
-
 		mtk_drm_trace_end("esd");
 
 		if (need_lock) {
 			DDP_MUTEX_UNLOCK(&mtk_crtc->lock, __func__, __LINE__);
 			DDP_COMMIT_UNLOCK(&private->commit.lock, __func__, __LINE__);
-		}
-
-		if (esd_recovery_backlight_flg) {
-			esd_recover_set_backlight_level();
 		}
 
 		return 0;
@@ -718,9 +696,6 @@ static int mtk_drm_esd_check_worker_kthread(void *data)
 	struct sched_param param = {.sched_priority = 87};
 	struct mtk_drm_esd_ctx *esd_ctx = (struct mtk_drm_esd_ctx *)data;
 	int ret = 0, index = 0;
-#if IS_ENABLED(CONFIG_MIEV)
-	struct mi_event_info mi_event = {0};
-#endif
 
 	sched_setscheduler(current, SCHED_RR, &param);
 
@@ -753,10 +728,6 @@ static int mtk_drm_esd_check_worker_kthread(void *data)
 			}
 			CRTC_MMP_MARK(index, esd_check, 0x57A7, esd_ctx->chk_retry);
 			del_timer_sync(&esd_ctx->esd_timer);
-#if IS_ENABLED(CONFIG_MIEV)
-			mi_event.event_type = MI_EVENT_PRI_PANEL_REG_ESD;
-			mi_disp_mievent_int(MI_DISP_PRIMARY, &mi_event);
-#endif
 			mtk_drm_esd_testing_process(esd_ctx, true);
 		} while (esd_ctx->chk_retry > 0);
 

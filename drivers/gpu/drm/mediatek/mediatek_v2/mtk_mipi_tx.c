@@ -5405,16 +5405,6 @@ static int mtk_mipi_tx_pll_prepare_mt6768(struct clk_hw *hw)
 	} else {
 		return -EINVAL;
 	}
-	
-	/* 0.44V */
-	writel(0x444422aa, mipi_tx->regs + MIPITX_VOLTAGE_SEL);
-
-	/* change the mipi_volt */
-	if (mipi_volt) {
-		DDPMSG("%s+ mipi_volt change: %d\n", __func__, mipi_volt);
-		mtk_mipi_tx_update_bits(mipi_tx, MIPITX_VOLTAGE_SEL,
-			FLD_RG_DSI_HSTX_LDO_REF_SEL, mipi_volt<<6);
-	}
 
 	writel(0x0, mipi_tx->regs + MIPITX_PRESERVED);
 	writel(0x00FF12E0, mipi_tx->regs + MIPITX_PLL_CON4);
@@ -8639,6 +8629,7 @@ static const struct of_device_id mtk_mipi_tx_match[] = {
 	{.compatible = "mediatek,mt6879-mipi-tx", .data = &mt6879_mipitx_data},
 	{.compatible = "mediatek,mt6855-mipi-tx", .data = &mt6855_mipitx_data},
 	{.compatible = "mediatek,mt6835-mipi-tx", .data = &mt6835_mipitx_data},
+	{.compatible = "mediatek,mt6771-mipi-tx", .data = &mt6885_mipitx_data},
 	{.compatible = "mediatek,mt6873-mipi-tx-cphy",
 		.data = &mt6873_mipitx_cphy_data},
 	{.compatible = "mediatek,mt6879-mipi-tx-cphy",
