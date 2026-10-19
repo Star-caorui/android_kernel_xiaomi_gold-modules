@@ -3,5 +3,10 @@
 # Character device configuration
 #
 
+config XLOGCHAR
+	tristate "xlogchar driver"
+	help
+	  A high performance log driver used by Xiaomi's logging.
+
 source "$(KCONFIG_EXT_PREFIX)drivers/char/hw_random/Kconfig"
 source "$(KCONFIG_EXT_PREFIX)drivers/char/rpmb/Kconfig"
