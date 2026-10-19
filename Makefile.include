@@ -3,7 +3,12 @@
 # This file should be included by external modules that need to link to this
 # project.
 
+# A 6.6 kernel builds external modules in their source directory, so look
+# there first; MediaTek's build has them in the output tree.
+DEVICE_MODULES_SYMBOL := $(wildcard $(KERNEL_SRC)/$(DEVICE_MODULES_REL_DIR)/Module.symvers)
+ifeq ($(DEVICE_MODULES_SYMBOL),)
 DEVICE_MODULES_SYMBOL := $(OUT_DIR)/$(DEVICE_MODULES_REL_DIR)/Module.symvers
+endif
 ifneq ($(wildcard $(DEVICE_MODULES_SYMBOL)),)
 EXTRA_SYMBOLS += $(DEVICE_MODULES_SYMBOL)
 else
