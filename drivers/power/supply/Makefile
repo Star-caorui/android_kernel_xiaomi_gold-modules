@@ -5,6 +5,8 @@ subdir-ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/typec/tcpc/in
 subdir-ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/power_throttling
 subdir-ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/include
 subdir-ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/power/supply/ufcs
+# gold: soft HVDCP in the MT6360 charger
+subdir-ccflags-y += -DCONFIG_MTK_SOFT_HVDCP_2
 
 ifeq ($(CONFIG_CHARGER_SGM41516D),m)
 obj-$(CONFIG_CHARGER_SGM41516D) += mtk_charger_framework.o charger_class.o adapter_class.o mtk_charger_algorithm_class.o mtk_ufcs_adapter.o sgm41516d.o mtk_chg_det.o
@@ -20,7 +22,6 @@ mtk_charger_framework-objs := mtk_charger.o mtk_charger_intf.o mtk_basic_charger
 mtk_pd_charging-objs := mtk_pd.o mtk_pd_hal.o
 obj-$(CONFIG_CHARGER_RT9465)	+= rt9465.o
 #obj-$(CONFIG_BATTERY_MT6359P) += mt6359p_battery.o
-obj-$(CONFIG_DEVICE_MODULES_CHARGER_MT6360) += mt6360_charger.o
 obj-$(CONFIG_DEVICE_MODULES_CHARGER_MT6370)	+= mt6370-charger.o
 obj-$(CONFIG_DEVICE_MODULES_CHARGER_MT6360)	+= mt6360_pmu_chg.o
 obj-$(CONFIG_CHARGER_MT6362)	+= mt6362-chg.o
@@ -64,6 +65,8 @@ mtk_pep50p-objs := mtk_pe5p.o mtk_pe5p_hal.o
 obj-$(CONFIG_CURRENT_SELECTOR_MAX17332) += max1720x_battery.o
 obj-$(CONFIG_CURRENT_SELECTOR_MTK_2P_CHARGER) += mtk_2p_charger.o
 obj-$(CONFIG_CHARGER_RT9759)	+= rt9759.o
+obj-$(CONFIG_SC8551X_CHARGER)	+= sc8551x_charger.o
+obj-$(CONFIG_LN8000_CHARGER)	+= ln8000_charger.o
 obj-$(CONFIG_CHARGER_RT9490)	+= rt9490-charger.o
 obj-$(CONFIG_CHARGER_RT9758)	+= rt9758-charger.o
 obj-$(CONFIG_UFCS_CLASS)	+= ufcs/
@@ -72,3 +75,4 @@ obj-$(CONFIG_UFCS_CLASS)	+= ufcs/
 obj-$(CONFIG_CHARGER_BQ25605) += bq25601.o
 obj-$(CONFIG_XM_CHG_DFS)    += xm_chg_dfs.o
 obj-$(CONFIG_HQ_NOTIFY) += hq_notify.o
+obj-$(CONFIG_HQ_CHARGER_SYSFS) += hq_charger_sysfs.o

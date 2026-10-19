@@ -334,4 +334,25 @@ config HQ_NOTIFY
 	  The notifier chains gold's charging drivers send their events on:
 	  the charger, the charge pumps, the charger manager and the gauge.
 
+config HQ_CHARGER_SYSFS
+	tristate "Huaqin's charger sysfs"
+	depends on MTK_CHARGER && TCPC_CLASS
+	help
+	  The usb power supply and the charging nodes gold's user space reads:
+	  the charger and Type-C state, input_suspend, the battery's supplier.
+
+config SC8551X_CHARGER
+	tristate "Southchip SC8551 charge pump"
+	depends on MTK_CHARGER
+	help
+	  The SC8551 divide-by-two charge pump of gold's fast charging, as an
+	  MTK charger class device.
+
+config LN8000_CHARGER
+	tristate "Cirrus Logic LN8000 charge pump"
+	depends on MTK_CHARGER
+	help
+	  The LN8000 divide-by-two charge pump of gold's fast charging, as an
+	  MTK charger class device.
+
 source "$(KCONFIG_EXT_PREFIX)drivers/power/supply/ufcs/Kconfig"
