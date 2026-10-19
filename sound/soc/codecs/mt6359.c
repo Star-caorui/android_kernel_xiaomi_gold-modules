@@ -27,6 +27,9 @@
 #if IS_ENABLED(CONFIG_SND_SOC_MT6359P_ACCDET)
 #include "mt6359p-accdet.h"
 #endif
+/* gold's AW87xxx speaker amplifier driver, looked up at run time */
+extern unsigned long hq_kallsyms_lookup_name(const char *name);
+int (*aw87xxx_add_codec_controls)(void *codec) = NULL;
 
 #define MAX_DEBUG_WRITE_INPUT 256
 #define CODEC_SYS_DEBUG_SIZE (1024 * 32) // 32K
@@ -5529,6 +5532,7 @@ static int mt6359_codec_probe(struct snd_soc_component *cmpnt)
 	ret = snd_card_add_dev_attr(card, &codec_bin_attr_group);
 	if (ret)
 		pr_info("%s snd_card_add_dev_attr fail\n", __func__);
+	pr_info("%s: enter \n", __func__);
 
 	snd_soc_component_init_regmap(cmpnt, priv->regmap);
 
@@ -5542,6 +5546,15 @@ static int mt6359_codec_probe(struct snd_soc_component *cmpnt)
 				       ARRAY_SIZE(mt6359_snd_vow_controls));
 
 	priv->hp_current_calibrate_val = get_hp_current_calibrate_val(priv);
+
+	if (!IS_ERR_OR_NULL(aw87xxx_add_codec_controls)) {
+		pr_info("%s: aw87xxx_add_codec_controls enter \n", __func__);
+		ret = aw87xxx_add_codec_controls(cmpnt);
+		if (ret < 0)
+			pr_err("%s: aw87xxx_add_codec_controls failed, ret= %d\n", __func__, ret);
+		else
+			pr_err("%s: aw87xxx_add_codec_controls success, ret= %d\n", __func__, ret);
+	}
 
 	return mt6359_codec_init_reg(cmpnt);
 }
@@ -6751,9 +6764,16 @@ static int mt6359_platform_driver_probe(struct platform_device *pdev)
 	struct mt6359_priv *priv;
 	int ret;
 	struct mt6397_chip *mt6397 = dev_get_drvdata(pdev->dev.parent);
+	unsigned long addr;
 
 	dev_info(&pdev->dev, "%s(), dev name %s\n",
 		 __func__, dev_name(&pdev->dev));
+
+	addr = hq_kallsyms_lookup_name("snd_soc_aw87xx:aw87xxx_add_codec_controls");
+	if (unlikely(!addr))
+		pr_err("%s: look up  aw87xxx_add_codec_controls failed!\n", __func__);
+	else
+		aw87xxx_add_codec_controls = (void *)addr;
 
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)

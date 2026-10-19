@@ -945,6 +945,11 @@ static void send_status_event(u32 cable_type, u32 status)
 				SND_JACK_MICROPHONE);
 		pr_info("accdet MICROPHONE(4-pole) %s\n",
 			status ? "PlugIn" : "PlugOut");
+		/* A key held through the plug-in still reads as AB=00 when the
+		 * micbias timer expires, which would turn micbias off and leave
+		 * the keys dead: stop the timer once it is a 4-pole headset.
+		 */
+		del_timer_sync(&micbias_timer);
 		break;
 	case LINE_OUT_DEVICE:
 		if (status)
@@ -3011,8 +3016,8 @@ int mt6359p_accdet_init(struct snd_soc_component *component,
 
 	accdet->jack.jack->input_dev->id.bustype = BUS_HOST;
 	snd_jack_set_key(accdet->jack.jack, SND_JACK_BTN_0, KEY_PLAYPAUSE);
-	snd_jack_set_key(accdet->jack.jack, SND_JACK_BTN_1, KEY_VOLUMEDOWN);
-	snd_jack_set_key(accdet->jack.jack, SND_JACK_BTN_2, KEY_VOLUMEUP);
+	snd_jack_set_key(accdet->jack.jack, SND_JACK_BTN_1, BTN_2);
+	snd_jack_set_key(accdet->jack.jack, SND_JACK_BTN_2, BTN_1);
 	snd_jack_set_key(accdet->jack.jack, SND_JACK_BTN_3, KEY_VOICECOMMAND);
 
 	snd_soc_component_set_jack(component, &accdet->jack, NULL);

@@ -6,6 +6,7 @@
  *  Author: Yujie Xiao <yujie.xiao@mediatek.com>
  */
 
+#include <linux/kprobes.h>
 #include <linux/module.h>
 #include <linux/pm_runtime.h>
 #include <sound/pcm_params.h>
@@ -24,6 +25,14 @@
 #include "../../codecs/mt6359p-accdet.h"
 #endif
 #include "../common/mtk-sp-spk-amp.h"
+#if IS_ENABLED(CONFIG_MIEV)
+#include <miev/mievent.h>
+#endif
+
+/* gold's SIA81xx speaker amplifier driver, looked up at run time */
+extern unsigned long hq_kallsyms_lookup_name(const char *name);
+int (*soc_aux_init_only_sia81xx)(struct platform_device *pdev,
+				 struct snd_soc_card *card) = NULL;
 
 /*
  * if need additional control for the ext spk amp that is connected
@@ -1140,6 +1149,11 @@ static int mt6833_mt6359_dev_probe(struct platform_device *pdev)
 	struct device_node *platform_node, *spk_node;
 	int ret, i;
 	struct snd_soc_dai_link *dai_link;
+	unsigned long addr;
+#if IS_ENABLED(CONFIG_MIEV)
+	struct misight_mievent *mievent;
+	struct timespec64 curTime;
+#endif
 
 	dev_info(&pdev->dev, "%s() card %p\n", __func__, card);
 
@@ -1193,13 +1207,35 @@ static int mt6833_mt6359_dev_probe(struct platform_device *pdev)
 
 	card->dev = &pdev->dev;
 
+	addr = hq_kallsyms_lookup_name("snd_soc_sipa:soc_aux_init_only_sia81xx");
+	if (unlikely(!addr))
+		pr_err("%s: look up  soc_aux_init_only_sia81xx failed!\n", __func__);
+	else
+		soc_aux_init_only_sia81xx = (void *)addr;
+	if (!IS_ERR_OR_NULL(soc_aux_init_only_sia81xx)) {
+		pr_err("%s: start to call soc_aux_init_only_sia81xx\n", __func__);
+		ret = soc_aux_init_only_sia81xx(pdev, card);
+		if (ret)
+			dev_err(&pdev->dev, "%s soc_aux_init_only_sia81xx fail %d\n",
+				__func__, ret);
+	}
+
 	ret = devm_snd_soc_register_card(&pdev->dev, card);
-	if (ret)
+	if (ret) {
 		dev_err(&pdev->dev, "%s snd_soc_register_card fail %d\n",
 			__func__, ret);
-	else
-		dev_err(&pdev->dev, "%s snd_soc_register_card pass %d\n",
+#if IS_ENABLED(CONFIG_MIEV)
+		ktime_get_real_ts64(&curTime);
+		mievent = cdev_tevent_alloc(906001001);
+		cdev_tevent_add_int(mievent, "CurrentTime", curTime.tv_sec);
+		cdev_tevent_add_str(mievent, "Keyword", "sound_card_not_registered");
+		cdev_tevent_write(mievent);
+		cdev_tevent_destroy(mievent);
+#endif
+	} else {
+		dev_err(&pdev->dev, "%s snd_soc_register_card success %d\n",
 			__func__, ret);
+	}
 	return ret;
 }
 
