@@ -5,7 +5,6 @@ obj-$(CONFIG_MTK_HWMON)	    += hwmon/
 obj-y += sensor_probe/
 obj-$(CONFIG_CUSTOM_KERNEL_ALSPS) += alsps/
 ifeq ($(CONFIG_CUSTOM_KERNEL_ACCELGYRO),y)
-obj-y += accelgyro/
 else
 obj-$(CONFIG_CUSTOM_KERNEL_ACCELEROMETER) += accelerometer/
 obj-$(CONFIG_CUSTOM_KERNEL_GYROSCOPE) += gyroscope/

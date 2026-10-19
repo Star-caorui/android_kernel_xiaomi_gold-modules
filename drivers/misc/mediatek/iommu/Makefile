@@ -20,7 +20,6 @@ ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/iommu
 ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/trusted_mem/
 
 ifneq ($(filter y m, $(CONFIG_MTK_TEE_GP_COORDINATOR)),)
-include $(DEVICE_MODULES_PATH)/drivers/tee/gpapi/Makefile.client.include
 else
 ifneq ($(filter y m, $(CONFIG_TRUSTONIC_TEE_SUPPORT)),)
 ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/tee/gud/$(CONFIG_TRUSTONIC_TEE_VERSION)/MobiCoreDriver/public

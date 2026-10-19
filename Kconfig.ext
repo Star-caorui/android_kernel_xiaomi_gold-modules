@@ -128,6 +128,5 @@ source "$(KCONFIG_EXT_PREFIX)drivers/hypervisor/host/Kconfig"
 
 source "$(KCONFIG_EXT_PREFIX)drivers/hypervisor/nebula/Kconfig"
 
-source "$(KCONFIG_EXT_PREFIX)/drivers/video/backlight/Kconfig"
 
 source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/launch_boost/Kconfig"

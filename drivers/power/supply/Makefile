@@ -30,7 +30,6 @@ mt6379-chg-objs := mt6379-charger.o mt6379-chgdev.o
 obj-$(CONFIG_GAUGE_MT6375)	+= mt6375-battery.o
 mt6375-battery-objs := mtk_battery_coulomb_service.o mtk_battery.o mtk_battery_algo.o mt6375-gauge.o mtk_battery_daemon.o
 ifneq ($(wildcard $(srctree)/$(src)/k6985v1_64_alpha),)
-obj-$(CONFIG_GAUGE_BQ28Z610)      += k6985v1_64_alpha/
 endif
 mtk_battery_manager-objs := mtk-battery-manager.o mtk_battery_interface.o
 mt6357_battery-objs := mt6357-gauge.o mtk_battery_coulomb_service.o mtk_battery.o mtk_battery_algo.o mtk_battery_daemon.o mtk_battery_interface.o
@@ -70,6 +69,5 @@ obj-$(CONFIG_CHARGER_RT9758)	+= rt9758-charger.o
 obj-$(CONFIG_UFCS_CLASS)	+= ufcs/
 
 # obj-$(CONFIG_CHARGER_BQ2589X)	+= bq2589x_charger.o
-obj-m     += wt_chg/
 obj-$(CONFIG_CHARGER_BQ25605) += bq25601.o
 obj-$(CONFIG_XM_CHG_DFS)    += xm_chg_dfs.o
