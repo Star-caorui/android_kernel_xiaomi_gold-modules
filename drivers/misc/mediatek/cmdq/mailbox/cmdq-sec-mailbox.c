@@ -850,15 +850,17 @@ static s32 cmdq_sec_session_init(struct cmdq_sec_context *context)
 #endif
 
 #ifdef CMDQ_SECURE_MTEE_SUPPORT
-		err = cmdq_sec_mtee_register_wsm(&context->mtee,
-			&context->mtee_iwc_msg,
-			sizeof(struct iwcCmdqMessage_t),
-			&context->mtee_iwc_ex1,
-			sizeof(struct iwcCmdqMessageEx_t),
-			&context->mtee_iwc_ex2,
-			sizeof(struct iwcCmdqMessageEx2_t));
-		if (err)
-			break;
+		/* stock: if (!is_pkvm_enabled()) { */
+			err = cmdq_sec_mtee_register_wsm(&context->mtee,
+				&context->mtee_iwc_msg,
+				sizeof(struct iwcCmdqMessage_t),
+				&context->mtee_iwc_ex1,
+				sizeof(struct iwcCmdqMessageEx_t),
+				&context->mtee_iwc_ex2,
+				sizeof(struct iwcCmdqMessageEx2_t));
+			if (err)
+				break;
+		/* } */
 #endif
 		else {
 			if (!context->pkvm_iwc_msg ||
@@ -2037,6 +2039,7 @@ static struct platform_driver cmdq_sec_drv = {
 
 static struct cmdq_sec_context *g_context[2];
 
+
 static s32 cmdq_sec_prealloc_mem(void)
 {
 	struct cmdq_sec_context *context = NULL;
@@ -2071,6 +2074,8 @@ static s32 cmdq_sec_prealloc_mem(void)
 }
 #endif
 
+
+
 #if defined(CMDQ_GP_SUPPORT) || defined(CMDQ_SECURE_MTEE_SUPPORT)
 static s32 cmdq_sec_late_init_wsm(void *data)
 {
@@ -2103,6 +2108,7 @@ static s32 cmdq_sec_late_init_wsm(void *data)
 			cmdq->context->tgid = current->tgid;
 		}
 
+
 		mutex_lock(&cmdq->exec_lock);
 		if (cmdq->context->state == IWC_INIT)
 			cmdq_sec_setup_tee_context_base(cmdq->context);
@@ -2127,8 +2133,9 @@ static int __init cmdq_sec_late_init(void)
 		cmdq_err("kthread_run failed:%ld", PTR_ERR(kthr));
 	return PTR_ERR(kthr);
 }
-
 #endif
+
+
 
 static int __init cmdq_sec_init(void)
 {
@@ -2138,6 +2145,7 @@ static int __init cmdq_sec_init(void)
 	if (err)
 		cmdq_err("cmdq_sec_prealloc_mem failed:%d", err);
 #endif
+
 
 	err = platform_driver_register(&cmdq_sec_drv);
 	if (err)

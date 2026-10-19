@@ -49,6 +49,8 @@ s32 cmdq_sec_mtee_allocate_shared_memory(struct cmdq_sec_mtee_context *tee,
 			tee->mem_param.size, (unsigned long)tee->mem_param.buffer);
 	return status;
 }
+
+
 s32 cmdq_sec_mtee_allocate_wsm(void **wsm_buffer, u32 size, void **wsm_buf_ex, u32 size_ex,
 	void **wsm_buf_ex2, u32 size_ex2)
 {
@@ -107,6 +109,8 @@ s32 cmdq_sec_mtee_allocate_wsm(void **wsm_buffer, u32 size, void **wsm_buf_ex, u
 	return TZ_RESULT_SUCCESS;
 }
 
+
+
 s32 cmdq_sec_mtee_register_wsm(struct cmdq_sec_mtee_context *tee,
 	void **wsm_buffer, u32 size, void **wsm_buf_ex, u32 size_ex,
 	void **wsm_buf_ex2, u32 size_ex2)
@@ -122,6 +126,7 @@ s32 cmdq_sec_mtee_register_wsm(struct cmdq_sec_mtee_context *tee,
 		cmdq_err("null wsm pointer!");
 		return -EINVAL;
 	}
+
 
 	/* region_id = 0, mapAry = NULL for continuous */
 	if (!*wsm_buffer) {
@@ -144,6 +149,7 @@ s32 cmdq_sec_mtee_register_wsm(struct cmdq_sec_mtee_context *tee,
 		__func__, tee->wsm_pHandle, tee->wsm_handle,
 		tee->wsm_param.size, *wsm_buffer, (unsigned long)*wsm_buffer);
 
+
 	if (!*wsm_buf_ex) {
 		*wsm_buf_ex = kzalloc(size_ex, GFP_KERNEL);
 		if (!*wsm_buf_ex) {
@@ -164,6 +170,8 @@ s32 cmdq_sec_mtee_register_wsm(struct cmdq_sec_mtee_context *tee,
 		cmdq_log("%s: session:%#x handle:%#x size:%#x buffer:%p:%#lx",
 			__func__, tee->wsm_pHandle, tee->wsm_ex_handle,
 			tee->wsm_ex_param.size, *wsm_buf_ex, (unsigned long)*wsm_buf_ex);
+
+
 
 	if (!*wsm_buf_ex2) {
 		*wsm_buf_ex2 = kzalloc(size_ex2, GFP_KERNEL);

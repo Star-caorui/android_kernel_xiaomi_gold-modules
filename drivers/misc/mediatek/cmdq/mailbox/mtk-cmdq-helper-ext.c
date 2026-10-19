@@ -68,8 +68,10 @@ struct cmdq_sec_helper_fp *cmdq_sec_helper;
 #define CMDQ_MBOX_BUF_LIMIT	16 /* default limit count */
 #define CMDQ_HW_MAX			2
 
-/* sleep for 312 tick, which around 12us */
-#define CMDQ_POLL_TICK			312
+/* sleep for 312 tick, which around 12us; gold polls every 55 ticks
+ * (about 2us), as its own tree (HQ-298851) does
+ */
+#define CMDQ_POLL_TICK			55
 /* sleep for 8 bit, which around 9.85us */
 #define CMDQ_POLL_SLEEP			0x8
 
@@ -1606,7 +1608,9 @@ static bool cmdq_pkt_is_finalized(struct cmdq_pkt *pkt)
 
 	expect_eoc = cmdq_pkt_get_va_by_offset(pkt,
 		pkt->cmd_buf_size - CMDQ_INST_SIZE * 2);
-	if (((struct cmdq_instruction *)expect_eoc)->op == CMDQ_CODE_JUMP)
+	/* the offset may be past the buffers: check before reading */
+	if (expect_eoc &&
+		((struct cmdq_instruction *)expect_eoc)->op == CMDQ_CODE_JUMP)
 		expect_eoc = cmdq_pkt_get_va_by_offset(pkt,
 			pkt->cmd_buf_size - CMDQ_INST_SIZE * 3);
 	if (expect_eoc && (*expect_eoc & CMDQ_EOC_MASK) == CMDQ_EOC_CMD)
@@ -4873,6 +4877,12 @@ s32 cmdq_pkt_dump_buf(struct cmdq_pkt *pkt, dma_addr_t curr_pa)
 			size = CMDQ_CMD_BUFFER_SIZE - pkt->avail_buf_size;
 		} else if (cnt > 0 && !(curr_pa >= CMDQ_BUF_ADDR(buf) &&
 			curr_pa < CMDQ_BUF_ADDR(buf) + CMDQ_BUF_ALLOC_SIZE) && !alldump) {
+			/* a buffer without a mapping has nothing to show */
+			if (!buf->va_base) {
+				cmdq_err("buf->va_base is empty");
+				return -EINVAL;
+			}
+
 			cmdq_util_user_msg(client ? client->chan : NULL,
 				"buffer %u:%p va:0x%p pa:%pa iova:%pa alloc_time:%llu %#018llx (skip detail) %#018llx",
 				cnt, buf, buf->va_base, &buf->pa_base,
