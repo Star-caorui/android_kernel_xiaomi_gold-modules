@@ -328,4 +328,10 @@ config CHARGER_SGM41516D
 	  and config MTK_SWCHR_SUPPORT
 	  Set to Yes if SGM41516D is used.
 
+config HQ_NOTIFY
+	tristate "Huaqin's charging notifier chains"
+	help
+	  The notifier chains gold's charging drivers send their events on:
+	  the charger, the charge pumps, the charger manager and the gauge.
+
 source "$(KCONFIG_EXT_PREFIX)drivers/power/supply/ufcs/Kconfig"
