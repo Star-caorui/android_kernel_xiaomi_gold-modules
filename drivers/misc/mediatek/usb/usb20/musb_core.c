@@ -3167,10 +3167,10 @@ static void usb_dpidle_request(int mode)
 
 	switch (mode) {
 	case USB_DPIDLE_SUSPEND:
-		op = MTK_USB_SMC_INFRA_SUSPEND;
+		op = MTK_USB_SMC_INFRA_REQUEST;
 		break;
 	case USB_DPIDLE_RESUME:
-		op = MTK_USB_SMC_INFRA_RESUME;
+		op = MTK_USB_SMC_INFRA_RELEASE;
 		break;
 	default:
 		return;

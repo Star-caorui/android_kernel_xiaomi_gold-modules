@@ -48,6 +48,7 @@ static char *mailbox_state_string(enum mt_usb_vbus_id_state state)
 
 int mt_usb_set_vbus(struct otg_switch_mtk *otg_sx, int is_on)
 {
+#if 0	/* gold's OTG VBUS comes from the charger through extcon-mtk-usb */
 	struct mt_usb_glue *glue =
 		container_of(otg_sx, struct mt_usb_glue, otg_sx);
 	struct musb *musb = glue->mtk_musb;
@@ -69,7 +70,7 @@ int mt_usb_set_vbus(struct otg_switch_mtk *otg_sx, int is_on)
 	} else {
 		regulator_disable(vbus);
 	}
-
+#endif
 	return 0;
 }
 EXPORT_SYMBOL(mt_usb_set_vbus);
@@ -359,6 +360,7 @@ static int mt_usb_role_sw_register(struct otg_switch_mtk *otg_sx)
 	role_sx_desc.get = mt_usb_role_sx_get;
 	role_sx_desc.fwnode = dev_fwnode(glue->dev);
 	role_sx_desc.driver_data = glue;
+	role_sx_desc.allow_userspace_control = true;
 	otg_sx->role_sw = usb_role_switch_register(glue->dev, &role_sx_desc);
 
 	if (IS_ERR(otg_sx->role_sw))

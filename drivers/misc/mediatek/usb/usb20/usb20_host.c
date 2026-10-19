@@ -22,9 +22,7 @@
 #include <linux/of_address.h>
 #if IS_ENABLED(CONFIG_MTK_USB_TYPEC)
 #if IS_ENABLED(CONFIG_TCPC_CLASS)
-#include "tcpm.h"
-#elif IS_ENABLED(CONFIG_SOUTHCHIP_TCPC_CLASS)
-#include "../typec/sc_tcpc/inc/tcpm.h"
+#include <tcpm.h>
 #endif
 #endif
 #include <linux/workqueue.h>
@@ -468,8 +466,6 @@ static void do_host_work(struct work_struct *data)
 			usb_hcd_resume_root_hub(musb_to_hcd(mtk_musb));
 			musb_root_disconnect(mtk_musb);
 		}
-		spin_unlock_irqrestore(&mtk_musb->lock, flags);
-
 		DBG(1, "devctl is %x\n",
 				musb_readb(mtk_musb->mregs, MUSB_DEVCTL));
 		musb_writeb(mtk_musb->mregs, MUSB_DEVCTL, 0);
@@ -481,6 +477,8 @@ static void do_host_work(struct work_struct *data)
 		set_usb_phy_mode(PHY_MODE_INVALID);
 
 		musb_stop(mtk_musb);
+		DBG(0, "musb stopped\n");
+		spin_unlock_irqrestore(&mtk_musb->lock, flags);
 
 		if (!typec_control && !host_plug_test_triggered)
 			switch_int_to_host(mtk_musb);
@@ -595,7 +593,7 @@ void mt_usb_otg_init(struct musb *musb)
 #if IS_ENABLED(CONFIG_MTK_USB_TYPEC)
 	DBG(0, "host controlled by TYPEC\n");
 	typec_control = 1;
-#if IS_ENABLED(CONFIG_TCPC_CLASS) || IS_ENABLED(CONFIG_SOUTHCHIP_TCPC_CLASS)
+#if IS_ENABLED(CONFIG_TCPC_CLASS)
 	DBG(0, "host controlled by IDDIG\n");
 	iddig_int_init();
 	vbus_control = 1;

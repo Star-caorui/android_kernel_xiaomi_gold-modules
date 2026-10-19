@@ -2761,14 +2761,13 @@ void musb_g_resume(struct musb *musb)
 }
 
 /* called when SOF packets stop for 3+ msec */
-extern void usb_suspend_control_ibus(int ma);
 void musb_g_suspend(struct musb *musb)
 {
 	u8 devctl;
 
 	devctl = musb_readb(musb->mregs, MUSB_DEVCTL);
 	DBG(0, "devctl %02x\n", devctl);
-	usb_suspend_control_ibus(0);
+
 	switch (musb->xceiv->otg->state) {
 	case OTG_STATE_B_IDLE:
 		if ((devctl & MUSB_DEVCTL_VBUS) == MUSB_DEVCTL_VBUS)
