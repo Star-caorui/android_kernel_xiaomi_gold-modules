@@ -50,4 +50,4 @@ obj-$(CONFIG_SND_SOC_FS16XX)    += fs18xx/
 ifeq ($(CONFIG_SND_SOC_SIA8152X), m)
 ccflags-y += -DCONFIG_SND_SOC_SIA8152X
 endif
-obj-$(CONFIG_SND_SOC_SIA8152X)	+= sipa/
+obj-$(CONFIG_SND_SOC_AW87XXX) += aw87559/
