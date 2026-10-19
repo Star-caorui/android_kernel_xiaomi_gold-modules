@@ -9,7 +9,6 @@
 #include <linux/kdev_t.h>
 #include <linux/fs.h>
 #include <linux/cdev.h>
-#include <linux/delay.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/types.h>
@@ -23,7 +22,6 @@
 #include <linux/pm_wakeup.h>
 #include <linux/time.h>
 #include <linux/mutex.h>
-#include <linux/kthread.h>
 #include <linux/proc_fs.h>
 #include <linux/platform_device.h>
 #include <linux/seq_file.h>
@@ -80,11 +78,6 @@ struct sysfs_desc {
 
 	struct notifier_block tcpc_nb;
 	int pd_type;
-/*N17 code for HQ-290781 by wangtingting at 2023/5/29 start*/
-	struct task_struct *soc_decimal_task;
-	bool wakeup_thread;
-	wait_queue_head_t wq;
-/*N17 code for HQ-290781 by wangtingting at 2023/5/29 end*/
 /*N17 code for HQ-299258 by tongjiacheng at 2023/7/5 start*/
 	bool shutdown_delay;
 /*N17 code for HQ-299258 by tongjiacheng at 2023/7/5 end*/
@@ -166,13 +159,6 @@ static ssize_t shutdown_delay_show(struct device *dev,
 static struct device_attribute shutdown_delay_attr =
 __ATTR(shutdown_delay, 0444, shutdown_delay_show, NULL);
 
-/*N17 code for HQ-290781 by wangtingting at 2023/5/29 start*/
-static void wake_up_soc_decimal_task(struct sysfs_desc *desc)
-{
-	desc->wakeup_thread = true;
-	wake_up_interruptible(&desc->wq);
-}
-/*N17 code for HQ-290781 by wangtingting at 2023/5/29 end*/
 static int quick_chr_type;
 static int quick_chr_type_noti(struct notifier_block *nb,
 			       unsigned long event, void *v)
@@ -204,14 +190,12 @@ static int quick_chr_type_noti(struct notifier_block *nb,
 				res = 3;
 			else
 				res = 2;
-			wake_up_soc_decimal_task(desc);
 		}
 		break;
 	case POWER_SUPPLY_TYPE_USB_ACA:
 		res = 1;
 		break;
 	default:
-		desc->wakeup_thread = false;
 		break;
 	}
 
@@ -267,97 +251,6 @@ static int psy_change_noti(struct notifier_block *nb,
 	return 0;
 }
 /* N17 code for HQ-308084 by liunianliang at 2023/7/31 end */
-
-/*N17 code for HQ-290781 by wangtingtin at 2023/5/29 start*/
-static int get_uisoc_decimal_rate(struct sysfs_desc *desc, int *val)
-{
-	static int mtk_soc_decimal_rate[24] = {0,32,10,30,20,28,30,28,40,28,50,28,60,28,70,28,80,28,90,26,95,10,99,5};
-	static int *dec_rate_seq = &mtk_soc_decimal_rate[0];
-	static int dec_rate_len = 24;
-	int i, soc = 0;
-
-	for (i = 0; i < dec_rate_len; i += 2) {
-		if (soc < dec_rate_seq[i]) {
-			*val = dec_rate_seq[i - 1];
-			return soc;
-		}
-	}
-	*val = dec_rate_seq[dec_rate_len - 1];
-	return soc;
-}
-static void get_uisoc_decimal(struct sysfs_desc *desc, int *val)
-{
-	struct mtk_battery *gm = desc->bm->gm1 ? desc->bm->gm1 : desc->bm->gm2;
-	int dec_rate, soc_dec, soc, hal_soc;
-	static int last_val = 0, last_soc_dec = 0, last_hal_soc = 0;
-
-	hal_soc = desc->bm->uisoc;
-
-	soc_dec = gm->fg_cust_data.ui_old_soc % 100;
-	soc = get_uisoc_decimal_rate(desc, &dec_rate);
-
-	if (soc_dec >= 0 && soc_dec < (50 - dec_rate))
-		*val = soc_dec + 50;
-	else if (soc_dec >= (50 - dec_rate) && soc_dec < 50)
-		*val = soc_dec + 50 - dec_rate;
-	else
-		*val = soc_dec -50;
-	if (last_hal_soc == hal_soc) {
-		if ((last_val > *val && hal_soc != soc) || (last_soc_dec == soc_dec && hal_soc == soc)) {
-			if (last_val > 50)
-				*val = last_val + (100 - last_val - dec_rate) / 2;
-			else
-				*val = last_val + dec_rate / 4;
-		} else if (last_val > *val) {
-			*val = last_val;
-		}
-	}
-	if (last_val != *val)
-		last_val = *val;
-	if (last_soc_dec != soc_dec)
-		last_soc_dec = soc_dec;
-	if (last_hal_soc != hal_soc)
-		last_hal_soc = hal_soc;
-}
-/*N17 code for HQ-290781 by wangtingting at 2023/5/29 end*/
-
-/*N17 code for HQ-290781 by wangtingting at 2023/5/29 start*/
-static int soc_decimal_threadfn(void *param)
-{
-	int ret;
-	int soc_decimal;
-	int soc_decimal_rate;
-	char soc_decimal_str[64];
-	char soc_decimal_rate_str[64];
-	char *envp[] = {soc_decimal_str,
-					soc_decimal_rate_str, NULL};
-	struct sysfs_desc *desc = (struct sysfs_desc *)param;
-
-	while(!kthread_should_stop()) {
-			wait_event_interruptible(desc->wq, desc->wakeup_thread);
-
-			get_uisoc_decimal(desc, &soc_decimal);
-			get_uisoc_decimal_rate(desc, &soc_decimal_rate);
-
-			sprintf( envp[0],"POWER_SUPPLY_SOC_DECIMAL=%d", soc_decimal);
-			sprintf( envp[1],"POWER_SUPPLY_SOC_DECIMAL_RATE=%d", soc_decimal_rate);
-
-			ret = kobject_uevent_env(&desc->bat_psy->dev.kobj,
-					KOBJ_CHANGE, envp);
-			if (ret < 0){
-					sysfs_err("send uevent fail");
-
-					return -1;
-			}
-
-			msleep(100);
-	}
-	return 0;
-}
-/*N17 code for HQ-290781 by wangtingting at 2023/5/29 end*/
-
-
-
 
 static ssize_t quick_charge_type_show(struct device *dev,
 				      struct device_attribute *attr,
@@ -934,16 +827,6 @@ static int __init hq_charger_sysfs_init(void)
 	}
 /* N17 code for HQ-308084 by liunianliang at 2023/7/31 end */
 
-/*N17 code for HQ-290781 by wangtingting at 2023/5/29 start*/
-	desc->wakeup_thread = false;
-	init_waitqueue_head(&desc->wq);
-	desc->soc_decimal_task = kthread_run(soc_decimal_threadfn, desc,
-							"soc_decimal_task");
-	if (IS_ERR(desc->soc_decimal_task)) {
-			ret = -PTR_ERR(desc->soc_decimal_task);
-			sysfs_err("%s run task fail(%d)\n", __func__, ret);
-	}
-/*N17 code for HQ-290781 by wangtingting at 2023/5/29 end*/
 	g_desc = desc;
 
 	return 0;
