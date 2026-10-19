@@ -1476,19 +1476,16 @@ static void u2_phy_instance_set_mode(struct mtk_tphy *tphy,
 {
 	struct u2phy_banks *u2_banks = &instance->u2_banks;
 	u32 tmp;
-	u32 tmp_ssd;
 
 	dev_info(tphy->dev, "%s mode(%d), submode(%d)\n", __func__,
 		mode, submode);
 
 	if (!submode) {
 		tmp = readl(u2_banks->com + U3P_U2PHYDTM1);
-		tmp_ssd = readl(u2_banks->com + 0x014);
 		switch (mode) {
 		case PHY_MODE_USB_DEVICE:
 			u2_phy_props_set(tphy, instance);
 			tmp |= P2C_FORCE_IDDIG | P2C_RG_IDDIG;
-			tmp_ssd &= ~(1 << 16);
 			break;
 		case PHY_MODE_USB_HOST:
 			u2_phy_host_props_set(tphy, instance);
@@ -1501,7 +1498,6 @@ static void u2_phy_instance_set_mode(struct mtk_tphy *tphy,
 				tmp &= ~P2C_RG_SESSEND;
 			}
 #endif
-			tmp_ssd |= (1 << 16);
 			break;
 		case PHY_MODE_USB_OTG:
 			tmp &= ~(P2C_FORCE_IDDIG | P2C_RG_IDDIG);
@@ -1516,7 +1512,6 @@ static void u2_phy_instance_set_mode(struct mtk_tphy *tphy,
 				tmp |= P2C_FORCE_IDDIG;
 			} else
 				return;
-			tmp_ssd &= ~(1 << 16);
 			break;
 #endif
 
@@ -1531,7 +1526,6 @@ static void u2_phy_instance_set_mode(struct mtk_tphy *tphy,
 		}
 #endif
 		writel(tmp, u2_banks->com + U3P_U2PHYDTM1);
-		writel(tmp_ssd, u2_banks->com + 0x014);
 	} else {
 		switch (submode) {
 		case PHY_MODE_BC11_SW_SET:
