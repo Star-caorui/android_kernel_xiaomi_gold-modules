@@ -712,7 +712,7 @@ static int md_cd_dump_info(struct ccci_modem *md,
 		struct ccci_smem_region *ccb_ctl =
 			ccci_md_get_smem_by_user_id(SMEM_USER_RAW_CCB_CTRL);
 
-		if (ccb_ctl) {
+		if (ccb_ctl && ccb_ctl->size) {
 			CCCI_MEM_LOG_TAG(0, TAG,
 				"Dump CCB CTRL share memory\n");
 			ccci_util_mem_dump(CCCI_DUMP_MEM_DUMP,

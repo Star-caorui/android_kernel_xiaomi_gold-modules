@@ -19,33 +19,50 @@
 #include "ccci_modem.h"
 #include "ccci_swtp.h"
 #include "ccci_fsm.h"
-//+ N85-V  p-huangjing16.wt 2024.08.13  add swtp proc start
+
+/* N17 code for HQ-292079 by yangjinhao at 2023/04/25 start */
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
-static unsigned int swtp_gpio_value=0;
-//+ N85-V  p-huangjing16.wt 2024.08.13  add swtp proc end
+#include <linux/input/mt.h>
+#include <linux/input.h>
+/* N17 code for HQ-292079 by yangjinhao at 2023/04/25 end */
+
 /* must keep ARRAY_SIZE(swtp_of_match) = ARRAY_SIZE(irq_name) */
 const struct of_device_id swtp_of_match[] = {
 	{ .compatible = SWTP_COMPATIBLE_DEVICE_ID, },
-	{ .compatible = SWTP1_COMPATIBLE_DEVICE_ID,},
-	{ .compatible = SWTP2_COMPATIBLE_DEVICE_ID,},
-	{ .compatible = SWTP3_COMPATIBLE_DEVICE_ID,},
-	{ .compatible = SWTP4_COMPATIBLE_DEVICE_ID,},
 	{},
 };
 
 static const char irq_name[][16] = {
 	"swtp0-eint",
-	"swtp1-eint",
-	"swtp2-eint",
-	"swtp3-eint",
-	"swtp4-eint",
 	"",
 };
 
 struct swtp_t swtp_data;
 static const char rf_name[] = "RF_cable";
 #define MAX_RETRY_CNT 30
+
+/* N17 code for HQ-292079 by yangjinhao at 2023/04/25 start */
+static struct input_dev *swtp_input_dev;
+#define SWTP_GPIO_STATUS "gpio_status"
+int get_swtp_state = -1;
+int get_swtp_gpio = -1;
+static struct proc_dir_entry  *swtp_gpio_status;
+static int swtp_gpio_proc_show(struct seq_file *file, void *data)
+{
+	get_swtp_state = gpio_get_value(get_swtp_gpio);
+	seq_printf(file, "%d\n", get_swtp_state);
+	return 0;
+}
+static int swtp_gpio_proc_open (struct inode *inode, struct file *file)
+{
+	return single_open(file, swtp_gpio_proc_show, inode->i_private);
+}
+static const struct proc_ops swtp_gpio_status_ops = {
+	.proc_open = swtp_gpio_proc_open,
+	.proc_read = seq_read,
+};
+/* N17 code for HQ-292079 by yangjinhao at 2023/04/25 end */
 
 static int swtp_send_tx_power(struct swtp_t *swtp)
 {
@@ -72,6 +89,7 @@ static int swtp_send_tx_power(struct swtp_t *swtp)
 	return ret;
 }
 
+/* N17 code for HQ-292079 by yangjinhao at 2023/04/25 start */
 static int swtp_switch_state(int irq, struct swtp_t *swtp)
 {
 	unsigned long flags;
@@ -97,9 +115,24 @@ static int swtp_switch_state(int irq, struct swtp_t *swtp)
 	if (swtp->eint_type[i] == IRQ_TYPE_LEVEL_LOW) {
 		irq_set_irq_type(swtp->irq[i], IRQ_TYPE_LEVEL_HIGH);
 		swtp->eint_type[i] = IRQ_TYPE_LEVEL_HIGH;
+		if (swtp_input_dev != NULL) {
+			input_report_key(swtp_input_dev, KEY_TABLE0, 1);
+			input_sync(swtp_input_dev);
+			input_report_key(swtp_input_dev, KEY_TABLE0, 0);
+			input_sync(swtp_input_dev);
+			printk("[swtp]input keycode = %d", KEY_TABLE0);
+		}
+
 	} else {
 		irq_set_irq_type(swtp->irq[i], IRQ_TYPE_LEVEL_LOW);
 		swtp->eint_type[i] = IRQ_TYPE_LEVEL_LOW;
+		if (swtp_input_dev != NULL) {
+			input_report_key(swtp_input_dev, KEY_TABLE1, 1);
+			input_sync(swtp_input_dev);
+			input_report_key(swtp_input_dev, KEY_TABLE1, 0);
+			input_sync(swtp_input_dev);
+			printk("[swtp]input keycode = %d", KEY_TABLE1);
+		}
 	}
 
 	if (swtp->gpio_state[i] == SWTP_EINT_PIN_PLUG_IN)
@@ -109,19 +142,23 @@ static int swtp_switch_state(int irq, struct swtp_t *swtp)
 
 	swtp->tx_power_mode = SWTP_NO_TX_POWER;
 	for (i = 0; i < MAX_PIN_NUM; i++) {
-		if (swtp->gpio_state[i] == SWTP_EINT_PIN_PLUG_IN) {
+		if (swtp->gpio_state[i] == SWTP_EINT_PIN_PLUG_OUT) {
 			swtp->tx_power_mode = SWTP_DO_TX_POWER;
+			CCCI_LEGACY_ERR_LOG(-1, SYS,
+				"%s:swtp send DO\n", __func__);
 			break;
 		}
 	}
 
 	inject_pin_status_event(swtp->curr_mode, rf_name);
 	spin_unlock_irqrestore(&swtp->spinlock, flags);
-//+ N85-V  p-huangjing16.wt 2024.08.13  add swtp proc start
-	swtp_gpio_value = !(swtp->tx_power_mode);
-//+ N85-V  p-huangjing16.wt 2024.08.13  add swtp proc end
+
+	CCCI_LEGACY_ERR_LOG(-1, SYS,
+			"%s:swtp send %d\n", __func__ , swtp->tx_power_mode);
+
 	return swtp->tx_power_mode;
 }
+/* N17 code for HQ-292079 by yangjinhao at 2023/04/25 end */
 
 static void swtp_send_tx_power_state(struct swtp_t *swtp)
 {
@@ -183,30 +220,9 @@ int swtp_md_tx_power_req_hdlr(int data)
 
 	return 0;
 }
-//+ N85-V  p-huangjing16.wt 2024.08.13  add swtp proc start
-static int swtp_gpio_show(struct seq_file *m, void *v)
-{
-	seq_printf(m,"%d\n", swtp_gpio_value);
-	return 0;
-}
-static int swtp_gpio_proc_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, swtp_gpio_show, NULL);
-}
-static const struct proc_ops swtp_gpio_fops = {
-	.proc_open    = swtp_gpio_proc_open,
-	.proc_read    = seq_read,
-	.proc_lseek  = seq_lseek,
-	.proc_release = single_release,
-};
-static void swtp_gpio_create_proc(void)
-{
-	proc_create("swtp_status_value", 0444, NULL, &swtp_gpio_fops);
-}
-//+ N85-V  p-huangjing16.wt 2024.08.13  add swtp proc end
 static void swtp_init_delayed_work(struct work_struct *work)
 {
-	int i, ret = 0;
+	int i, ret, ret1 = 0;
 #ifdef CONFIG_MTK_EIC
 	u32 ints[2] = { 0, 0 };
 #else
@@ -271,7 +287,7 @@ static void swtp_init_delayed_work(struct work_struct *work)
 			swtp_data.irq[i] = irq_of_parse_and_map(node, 0);
 
 			ret = request_irq(swtp_data.irq[i],
-				swtp_irq_handler, IRQF_TRIGGER_NONE,
+				swtp_irq_handler, IRQF_TRIGGER_LOW,
 				irq_name[i], &swtp_data);
 			if (ret) {
 				CCCI_LEGACY_ERR_LOG(0, SYS,
@@ -288,9 +304,24 @@ static void swtp_init_delayed_work(struct work_struct *work)
 	}
 	register_ccci_sys_call_back(MD_SW_MD1_TX_POWER_REQ,
 		swtp_md_tx_power_req_hdlr);
-//+ N85-V  p-huangjing16.wt 2024.08.13  add swtp proc start
-	swtp_gpio_create_proc();
-//+ N85-V  p-huangjing16.wt 2024.08.13  add swtp proc end
+	get_swtp_gpio = of_get_named_gpio(node, "swtp-gpio", 0);
+	ret1 =  gpio_request(get_swtp_gpio, "swtp-gpio");
+	if (ret1) {
+		pr_err("gpio_request_one get_swtp_gpio(%d)=%d\n",get_swtp_gpio, ret1);
+	}
+	swtp_gpio_status = proc_create(SWTP_GPIO_STATUS, 0644, NULL, &swtp_gpio_status_ops);
+	if (swtp_gpio_status == NULL) {
+		printk("tpd, create_proc_entry swtp_gpio_status_ops failed\n");
+	}
+	swtp_input_dev = input_allocate_device();
+	swtp_input_dev->name = "swtp";
+	__set_bit(EV_KEY, swtp_input_dev->evbit);
+	input_set_capability(swtp_input_dev, EV_KEY, KEY_TABLE0);
+	input_set_capability(swtp_input_dev, EV_KEY, KEY_TABLE1);
+	ret = input_register_device(swtp_input_dev);
+	if (ret) {
+		printk("[SWTP]input device register fail \n");
+	}
 SWTP_INIT_END:
 	CCCI_BOOTUP_LOG(0, SYS, "%s end: ret = %d\n", __func__, ret);
 	CCCI_NORMAL_LOG(0, SYS, "%s end: ret = %d\n", __func__, ret);

@@ -353,7 +353,10 @@ static void ccci_get_ccb_raw_size(unsigned int *buf_size)
 		"CCB base: 0x%lx, size: 0x%x, udc: nc_size: 0x%x, c_size: 0x%x\n",
 		(unsigned long)ccb_ap_phy_addr, ccb_cache_size,
 		udc_noncache_size,udc_cache_size);
-
+	if (ccb_cache_size < CCB_CACHE_MIN_SIZE) {
+		*buf_size = 0;
+		return;
+	}
 	if (ccci_get_ap_plat() == 6768)
 		*buf_size = ccb_cache_size- CCB_CACHE_MIN_SIZE - udc_cache_size;
 	else
@@ -450,44 +453,48 @@ void ccci_md_config_layout_for_legacy(struct ccci_mem_layout *mem_layout)
 		}
 
 	}
+	if (md_bank4_cacheable_total_size == 0) {
+		mem_layout->md_bank4_cacheable = NULL;
+		return;
+	}
 	/* Runtime adjust cacheable size */
-	if (md_bank4_cacheable_total_size >= CCB_CACHE_MIN_SIZE) {
-		/*
-		* 2M is control part size,
-		* md1_legacy_cacheable[0].size
-		* initial value but changed by collect_ccb_info
-		*/
-		for (i = (SMEM_USER_CCB_END - SMEM_USER_CCB_START + 1);
-			i < cacheable_num; i++) {
-			switch (md1_legacy_cacheable[i].id) {
-			case SMEM_USER_CCB_END:
-				break;
-			case SMEM_USER_RAW_DHL:
-			case SMEM_USER_RAW_MDM:
-				ccci_get_ccb_raw_size(&cal_cache_size);
-				md1_legacy_cacheable[i].offset = CCB_CACHE_MIN_SIZE;
-				md1_legacy_cacheable[i].size = cal_cache_size;
-				break;
-			case SMEM_USER_RAW_UDC_DESCTAB:
-				md1_legacy_cacheable[i].offset =
-					md1_legacy_cacheable[i-1].offset
-					+ md1_legacy_cacheable[i-1].size;
-				md1_legacy_cacheable[i].size = udc_cache_size;
-				break;
-			case SMEM_USER_RAW_MD_CONSYS:
-			case SMEM_USER_RAW_USIP:
-				get_md_cache_region_info(md1_legacy_cacheable[i].id,
-					&cal_cache_offset, &cal_cache_size);
-				md1_legacy_cacheable[i].offset = cal_cache_offset;
-				md1_legacy_cacheable[i].size = cal_cache_size;
-				break;
-			default:
-				md1_legacy_cacheable[i].size = 0;
-				md1_legacy_cacheable[i].offset = 0;
-				break;
-			}
+	/*
+	* 2M is control part size,
+	* md1_legacy_cacheable[0].size
+	* initial value but changed by collect_ccb_info
+	*/
+	for (i = (SMEM_USER_CCB_END - SMEM_USER_CCB_START + 1);
+		i < cacheable_num; i++) {
+		switch (md1_legacy_cacheable[i].id) {
+		case SMEM_USER_CCB_END:
+			break;
+		case SMEM_USER_RAW_DHL:
+		case SMEM_USER_RAW_MDM:
+			ccci_get_ccb_raw_size(&cal_cache_size);
+			md1_legacy_cacheable[i].offset =
+				cal_cache_size ? CCB_CACHE_MIN_SIZE : 0;
+			md1_legacy_cacheable[i].size = cal_cache_size;
+			break;
+		case SMEM_USER_RAW_UDC_DESCTAB:
+			md1_legacy_cacheable[i].offset =
+				md1_legacy_cacheable[i-1].offset
+				+ md1_legacy_cacheable[i-1].size;
+			md1_legacy_cacheable[i].size = udc_cache_size;
+			break;
+		case SMEM_USER_RAW_MD_CONSYS:
+		case SMEM_USER_RAW_USIP:
+			get_md_cache_region_info(md1_legacy_cacheable[i].id,
+				&cal_cache_offset, &cal_cache_size);
+			md1_legacy_cacheable[i].offset = cal_cache_offset;
+			md1_legacy_cacheable[i].size = cal_cache_size;
+			break;
+		default:
+			md1_legacy_cacheable[i].size = 0;
+			md1_legacy_cacheable[i].offset = 0;
+			break;
 		}
-	} else if (udc_cache_size) {
+	}
+	if (udc_cache_size) {
 		for (i = 0; i < cacheable_num; i++) {
 			if (md1_legacy_cacheable[i].id == SMEM_USER_RAW_UDC_DESCTAB) {
 				md1_legacy_cacheable[i].offset = 0;
@@ -499,8 +506,7 @@ void ccci_md_config_layout_for_legacy(struct ccci_mem_layout *mem_layout)
 			md1_legacy_cacheable[i].offset = 0;
 			md1_legacy_cacheable[i].size = 0;
 		}
-	} else
-		mem_layout->md_bank4_cacheable = NULL;
+	}
 
 }
 
@@ -670,7 +676,7 @@ void ap_md_mem_init(struct ccci_mem_layout *mem_layout)
 			(unsigned long)md1_noncacheable_tbl[i].base_md_view_phy,
 			md1_noncacheable_tbl[i].size);
 	for (i = 0; i < ARRAY_SIZE(md1_cacheable_tbl); i++)
-		CCCI_NORMAL_LOG(-1, TAG,
+		CCCI_BOOTUP_LOG(-1, TAG,
 			"%s: C reg[%d]<%d>(0x%lx 0x%lx 0x%lx)[0x%x]\n", __func__,
 			i, md1_cacheable_tbl[i].id,
 			(unsigned long)md1_cacheable_tbl[i].base_ap_view_phy,

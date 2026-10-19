@@ -9,12 +9,12 @@
 /* modify MAX_PIN_NUM/DTS to support more gpio,
  * need to follow SOP for customization.
  */
-#define MAX_PIN_NUM 5
+#define MAX_PIN_NUM 1
 #define SWTP_COMPATIBLE_DEVICE_ID "mediatek, swtp-eint"
-#define SWTP1_COMPATIBLE_DEVICE_ID "mediatek, swtp1-eint"
-#define SWTP2_COMPATIBLE_DEVICE_ID "mediatek, swtp2-eint"
-#define SWTP3_COMPATIBLE_DEVICE_ID "mediatek, swtp3-eint"
-#define SWTP4_COMPATIBLE_DEVICE_ID "mediatek, swtp4-eint"
+
+/* gold reports the pin to userspace as these keys on the "swtp" input device */
+#define KEY_TABLE0		249
+#define KEY_TABLE1		250
 
 #define SWTP_EINT_PIN_PLUG_IN	(1)
 #define SWTP_EINT_PIN_PLUG_OUT	(0)
