@@ -312,6 +312,58 @@ int pe50_hal_enable_charging(struct chg_alg_device *alg, enum chg_idx chgidx,
 	return charger_dev_enable(hal->chgdevs[chgtyp], en);
 }
 
+/*N17 code for HQ-307853 by xm tianye9 at 2023/07/17 start*/
+int pe50_hal_get_work_mode_by_xm(struct chg_alg_device *alg, enum chg_idx chgidx, int *work_mode)
+{
+	int chgtyp = to_chgtyp(chgidx);
+	struct pe50_hal *hal = chg_alg_dev_get_drv_hal_data(alg);
+	int ret = 0;
+	int ops_work_mode = 0;
+
+	if (chgtyp < 0)
+		return chgtyp;
+
+	ret = xm_get_cp_work_mode(hal->chgdevs[chgtyp], &ops_work_mode);
+	*work_mode = ops_work_mode;
+	return ret;
+}
+
+int pe50_hal_set_work_mode_by_xm(struct chg_alg_device *alg, enum chg_idx chgidx, int work_mode)
+{
+	int chgtyp = to_chgtyp(chgidx);
+	struct pe50_hal *hal = chg_alg_dev_get_drv_hal_data(alg);
+
+	if (chgtyp < 0)
+		return chgtyp;
+
+	return xm_set_cp_work_mode(hal->chgdevs[chgtyp], work_mode);
+}
+/*N17 code for HQ-307853 by xm tianye9 at 2023/07/17 end*/
+
+/*N17 code for HQ-309331 by xm tianye9 at 2023/07/27 start*/
+int pe50_hal_get_cp_device_by_xm(struct chg_alg_device *alg, enum chg_idx chgidx)
+{
+	int chgtyp = to_chgtyp(chgidx);
+	struct pe50_hal *hal = chg_alg_dev_get_drv_hal_data(alg);
+
+	if (chgtyp < 0)
+		return chgtyp;
+
+	return xm_get_cp_device(hal->chgdevs[chgtyp]);
+}
+/*N17 code for HQ-309331 by xm tianye9 at 2023/07/27 end*/
+
+/*N17 code for HQHW-4862 by yeyinzi at 2023/08/15 start*/
+int pe50_hal_enable_termination(struct chg_alg_device *alg, enum chg_idx chgidx, bool en)
+{
+	int chgtyp = to_chgtyp(chgidx);
+	struct pe50_hal *hal = chg_alg_dev_get_drv_hal_data(alg);
+	if (chgtyp < 0)
+		return chgtyp;
+	return charger_dev_enable_termination(hal->chgdevs[chgtyp], en);
+}
+/*N17 code for HQHW-4862 by yeyinzi at 2023/08/15 end*/
+
 int pe50_hal_enable_hz(struct chg_alg_device *alg, enum chg_idx chgidx, bool en)
 {
 	int chgtyp = to_chgtyp(chgidx);
@@ -487,10 +539,13 @@ int pe50_hal_get_adc(struct chg_alg_device *alg, enum chg_idx chgidx,
 	ret = charger_dev_get_adc(hal->chgdevs[chgtyp], _chan, val, val);
 	if (ret < 0)
 		return ret;
+/*N17 code for HQ-291625 by miaozhichao at 2023/04/26 start*/
 	if (_chan == ADC_CHANNEL_VBAT || _chan == ADC_CHANNEL_IBAT ||
 	    _chan == ADC_CHANNEL_VBUS || _chan == ADC_CHANNEL_IBUS ||
-	    _chan == ADC_CHANNEL_VOUT || _chan == ADC_CHANNEL_VSYS)
+	    _chan == ADC_CHANNEL_VOUT || _chan == ADC_CHANNEL_VSYS) {
 		*val = micro_to_milli(*val);
+	}
+/*N17 code for HQ-291625 by miaozhichao at 2023/04/26 end*/
 	return 0;
 }
 
@@ -498,10 +553,18 @@ int pe50_hal_get_soc(struct chg_alg_device *alg, u32 *soc)
 {
 	int ret = -EOPNOTSUPP;
 	union power_supply_propval val = {0,};
+	struct power_supply *bat_psy;
 	struct pe50_hal *hal = chg_alg_dev_get_drv_hal_data(alg);
 
-	if (IS_ERR_OR_NULL(hal->bat_psy))
+	/* gold: the capacity the battery manager reports, as stock does */
+	bat_psy = power_supply_get_by_name("battery");
+	if (IS_ERR_OR_NULL(bat_psy)) {
+		PE50_ERR("%s Couldn't get psy\n", __func__);
+		*soc = 0;
+		ret = 0;
 		goto out;
+	}
+	hal->bat_psy = bat_psy;
 
 	ret = power_supply_get_property(hal->bat_psy,
 					POWER_SUPPLY_PROP_CAPACITY, &val);
@@ -567,6 +630,21 @@ int pe50_hal_set_aicr(struct chg_alg_device *alg, enum chg_idx chgidx, u32 mA)
 		return chgtyp;
 	return charger_dev_set_input_current(hal->chgdevs[chgtyp],
 					     milli_to_micro(mA));
+}
+
+/* gold: the switching charger's MIVR, set back when PE5 stops */
+int pe50_hal_set_mivr(struct chg_alg_device *alg, enum chg_idx chgidx, u32 uV)
+{
+	int ret, chgtyp = to_chgtyp(chgidx);
+	struct pe50_hal *hal;
+
+	if (!alg)
+		return -EINVAL;
+	hal = chg_alg_dev_get_drv_hal_data(alg);
+	ret = charger_dev_set_mivr(hal->chgdevs[chgtyp], uV);
+	if (ret < 0)
+		PE50_ERR("%s: failed, ret = %d\n", __func__, ret);
+	return ret;
 }
 
 int pe50_hal_get_ichg(struct chg_alg_device *alg, enum chg_idx chgidx, u32 *mA)

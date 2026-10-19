@@ -7,6 +7,8 @@ subdir-ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/include
 subdir-ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/power/supply/ufcs
 # gold: soft HVDCP in the MT6360 charger
 subdir-ccflags-y += -DCONFIG_MTK_SOFT_HVDCP_2
+# gold: the display's notifier, for the screen state
+subdir-ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2
 
 ifeq ($(CONFIG_CHARGER_SGM41516D),m)
 obj-$(CONFIG_CHARGER_SGM41516D) += mtk_charger_framework.o charger_class.o adapter_class.o mtk_charger_algorithm_class.o mtk_ufcs_adapter.o sgm41516d.o mtk_chg_det.o
@@ -17,7 +19,7 @@ obj-$(CONFIG_CHARGER_BQ25601) += mtk_charger_framework.o charger_class.o adapter
 else
 obj-$(CONFIG_MTK_CHARGER) += mtk_charger_framework.o mtk_pd_charging.o charger_class.o adapter_class.o mtk_charger_algorithm_class.o mtk_pd_adapter.o mtk_ufcs_adapter.o
 endif
-mtk_charger_framework-objs := mtk_charger.o mtk_charger_intf.o mtk_basic_charger.o mtk_pulse_charger.o mtk_adapter_switch.o
+mtk_charger_framework-objs := mtk_charger.o mtk_charger_intf.o mtk_basic_charger.o mtk_pulse_charger.o mtk_adapter_switch.o mtk_jeita.o
 
 mtk_pd_charging-objs := mtk_pd.o mtk_pd_hal.o
 obj-$(CONFIG_CHARGER_RT9465)	+= rt9465.o

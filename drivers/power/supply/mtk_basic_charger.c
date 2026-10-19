@@ -58,6 +58,12 @@
 #include <linux/reboot.h>
 
 #include "mtk_charger.h"
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 start*/
+#include "mtk_battery.h"
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 end*/
+
+/* N17 code for HQHW-5241 by p-xuyechen at 2023/9/11 */
+#define PD_CHARGER_CURRENT_LIMIT 3600000                         //3.6A
 
 static int _uA_to_mA(int uA)
 {
@@ -113,11 +119,17 @@ static bool is_typec_adapter(struct mtk_charger *info)
 	if (cap_type == MTK_CAP_TYPE_UNKNOWN &&
 			rp != 500 &&
 			info->chr_type != POWER_SUPPLY_TYPE_USB &&
-			info->chr_type != POWER_SUPPLY_TYPE_USB_CDP)
+			info->chr_type != POWER_SUPPLY_TYPE_USB_CDP
+			&& info->chr_type != POWER_SUPPLY_TYPE_USB_DCP
+/*N17 code for HQHW-4133 by miaozhichao at 2023/4/24 start*/
+			&& info->chr_type != POWER_SUPPLY_TYPE_USB_ACA)
+/*N17 code for HQHW-4133 by miaozhichao at 2023/4/24 end*/
 		return true;
 
 	return false;
 }
+
+/*N17 code for HQ-293343 by miaozhichao at 2023/4/24 end*/
 
 static bool support_fast_charging(struct mtk_charger *info)
 {
@@ -129,7 +141,12 @@ static bool support_fast_charging(struct mtk_charger *info)
 		alg = info->alg[i];
 		if (alg == NULL)
 			continue;
-
+/*N17 code for HQ-291625 by miaozhichao at 2023/04/26 start*/
+		chr_err("%s: alg:%d\n", __func__, i);
+		chr_err("%s: %d %d %d\n", __func__,
+			info->enable_fast_charging_indicator, alg->alg_id,
+			info->fast_charging_indicator);
+/*N17 code for HQ-291625 by miaozhichao at 2023/04/26 end*/
 		if (info->enable_fast_charging_indicator &&
 		    ((alg->alg_id & info->fast_charging_indicator) == 0))
 			continue;
@@ -145,6 +162,10 @@ static bool support_fast_charging(struct mtk_charger *info)
 			break;
 		}
 	}
+/* N17 code for HQ-307331 by tongjiacheng at 20230726 start */
+	if (info->battery_temp <= 5)
+		return false;
+/* N17 code for HQ-307331 by tongjiacheng at 20230726 end */
 	return ret;
 }
 
@@ -153,11 +174,43 @@ static bool select_charging_current_limit(struct mtk_charger *info,
 {
 	struct charger_data *pdata, *pdata2, *pdata_dvchg;
 	bool is_basic = false;
+/*N17 code for HQHW-4676 by wangtingting at 2023/7/24 start*/
+	bool id_flag = false;
+/*N17 code for HQHW-4676 by wangtingting at 2023/7/24 end*/
 	u32 ichg1_min = 0, aicr1_min = 0;
 	int ret;
+/*N17 code for HQ-299665 by miaozhichao at 2023/6/14 start*/
+	union power_supply_propval val_full;
+	struct power_supply *psy;
+/*N17 code for HQ-299665 by miaozhichao at 2023/6/14 end*/
+	/* N17 code for HQ-292280 by tongjiacheng at 20230610 start */
+	int level;
+	/* N17 code for HQ-292280 by tongjiacheng at 20230610 end */
+	/* N17 code for HQ-292280 by tongjiacheng at 20230613 start */
+	union power_supply_propval val = {0};
+	/* N17 code for HQ-292280 by tongjiacheng at 20230613 end */
+	/* N17 code for HQHW-4275 by tongjiacheng at 20230625 start */
+	static bool pe5_thermal_stop = true;
+	static struct chg_alg_device *pe5_alg;
+	/* N17 code for HQHW-4275 by tongjiacheng at 20230625 end */
+        /*N17 code for low_fast by xm liluting at 2023/07/07 start*/
+        int thermal_vote_current;
+        struct mtk_battery_manager *bm;
+        union power_supply_propval val_capacity;
+	union power_supply_propval val_auth;
+        int blankState = 0, low_fast_enable = 0;
+        bool fast_flag = false;
+        time64_t time_now = 0, delta_time = 0;
+        static time64_t time_last = 0;
+        static int last_level = 0;
+        static bool hot_flag = false;
+        /*N17 code for low_fast by xm liluting at 2023/07/07 end*/
 
+/* N17 code for HQ-292280 by tongjiacheng at 20230610 start */
+	level = info->thermal_level;
+/* N17 code for HQ-292280 by tongjiacheng at 20230610 end */
 	select_cv(info);
-
+	chr_err("%s: ta_type:%d\n", __func__, info->ta_capability);
 	pdata = &info->chg_data[CHG1_SETTING];
 	pdata2 = &info->chg_data[CHG2_SETTING];
 	pdata_dvchg = &info->chg_data[DVCHG1_SETTING];
@@ -197,11 +250,30 @@ static bool select_charging_current_limit(struct mtk_charger *info,
 
 	if (info->chr_type == POWER_SUPPLY_TYPE_USB &&
 	    info->usb_type == POWER_SUPPLY_USB_TYPE_SDP) {
-		pdata->input_current_limit =
+/*N17 code for HQHW-4133 by miaozhichao at 2023/4/24 start*/
+		if (info->ta_capability == WO_APDO_TA) {
+			pdata->input_current_limit =
+				info->data.charging_host_charger_current;
+			pdata->charging_current_limit =
+				info->data.charging_host_charger_current;
+		/* N17 code for HQ-319411 by p-xuyechen at 2023/9/28 start */
+		} else if (info->ta_capability == APDO_TA) {
+			pdata->input_current_limit = info->data.ac_charger_input_current;
+			pdata->charging_current_limit = info->data.ac_charger_input_current;
+		/* N17 code for HQ-319411 by p-xuyechen at 2023/9/28 end */
+		} else if (info->is_mtbf) {
+			pdata->input_current_limit =
+				info->data.charging_host_charger_current;
+			pdata->charging_current_limit =
+				info->data.charging_host_charger_current;
+		} else {
+			pdata->input_current_limit =
 				info->data.usb_charger_current;
-		/* it can be larger */
-		pdata->charging_current_limit =
+			/* it can be larger */
+			pdata->charging_current_limit =
 				info->data.usb_charger_current;
+		}
+/*N17 code for HQHW-4133 by miaozhichao at 2023/4/24 end*/
 		is_basic = true;
 	} else if (info->chr_type == POWER_SUPPLY_TYPE_USB_CDP) {
 		pdata->input_current_limit =
@@ -220,13 +292,38 @@ static bool select_charging_current_limit(struct mtk_charger *info,
 				pdata->input_current_limit;
 			pdata2->charging_current_limit = 2000000;
 		}
+	}
+/*N17 code for HQ-293343 by miaozhichao at 2023/4/24 start*/
+	else if (info->chr_type == POWER_SUPPLY_TYPE_USB_ACA) {
+		pdata->input_current_limit =
+		    info->data.ac_charger_input_current;
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 start*/
+		pdata->charging_current_limit = 3200000;
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 end*/
+		is_basic = true;
+/*N17 code for HQ-293343 by miaozhichao at 2023/4/24 end*/
 	} else if (info->chr_type == POWER_SUPPLY_TYPE_USB &&
 	    info->usb_type == POWER_SUPPLY_USB_TYPE_DCP) {
 		/* NONSTANDARD_CHARGER */
+/*N17 code for HQ-290909 by miaozhichao at 2023/5/25 start*/
 		pdata->input_current_limit =
-			info->data.usb_charger_current;
+		    info->data.non_std_ac_charger_current;
 		pdata->charging_current_limit =
-			info->data.usb_charger_current;
+		    info->data.non_std_ac_charger_current;
+/*N17 code for HQHW-4567 by wangtingting at 2023/7/10 start*/
+		if (info->ta_capability == WO_APDO_TA) {
+			pdata->input_current_limit =
+				info->data.ac_charger_input_current;
+			/* N17 code for HQHW-5241 by p-xuyechen at 2023/9/11 */
+			pdata->charging_current_limit = PD_CHARGER_CURRENT_LIMIT;
+		/* N17 code for HQ-319411 by p-xuyechen at 2023/9/28 start */
+		} else if (info->ta_capability == APDO_TA) {
+			pdata->input_current_limit = info->data.ac_charger_input_current;
+			pdata->charging_current_limit = info->data.ac_charger_input_current;
+		}
+		/* N17 code for HQ-319411 by p-xuyechen at 2023/9/28 end */
+/*N17 code for HQHW-4567 by wangtingting at 2023/7/10 end*/
+/*N17 code for HQ-290909 by miaozhichao at 2023/5/25 end*/
 		is_basic = true;
 	} else {
 		/*chr_type && usb_type cannot match above, set 500mA*/
@@ -237,9 +334,28 @@ static bool select_charging_current_limit(struct mtk_charger *info,
 		is_basic = true;
 	}
 
-	if (support_fast_charging(info))
+/*N17 code for HQHW-4676 by wangtingting at 2023/7/24 start*/
+	if (!id_flag) {
+		psy = power_supply_get_by_name("batt_verify");
+		if (psy) {
+			power_supply_get_property(psy,
+				POWER_SUPPLY_PROP_AUTHENTIC, &val_auth);
+			if(val_auth.intval)
+				id_flag = true;
+			else
+				id_flag = false;
+		}
+	}
+
+	if (support_fast_charging(info) && id_flag)
+/*N17 code for HQHW-4676 by wangtingting at 2023/7/24 end*/
 		is_basic = false;
-	else {
+	/* N17 code for HQHW-4815 by p-xuyechen at 2023/8/15 start */
+	else if (info->ta_capability == WO_APDO_TA) {
+		pr_info("pd_type = %d, set basic to false\n", info->ta_capability);
+		is_basic = false;
+	} else {
+	/* N17 code for HQHW-4815 by p-xuyechen at 2023/8/15 end */
 		is_basic = true;
 		/* AICL */
 		if (!info->disable_aicl)
@@ -278,21 +394,241 @@ static bool select_charging_current_limit(struct mtk_charger *info,
 					TYPEC_RP_LEVEL));
 		}
 	}
-
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 start*/
 	if (info->enable_sw_jeita) {
-		if (IS_ENABLED(CONFIG_USBIF_COMPLIANCE)
-			&& info->chr_type == POWER_SUPPLY_TYPE_USB)
-			chr_debug("USBIF & STAND_HOST skip current check\n");
-		else {
-			if (info->sw_jeita.sm == TEMP_T0_TO_T1) {
-				pdata->input_current_limit = 500000;
-				pdata->charging_current_limit = 350000;
-			}
-		}
+		if (pdata->charging_current_limit >= info->sw_jeita.cc)
+			pdata->charging_current_limit = info->sw_jeita.cc;
+		if (info->setting.charging_current_limit1 == -1 ||
+		    info->setting.charging_current_limit1 >= info->sw_jeita.cc)
+			info->setting.charging_current_limit1 = info->sw_jeita.cc;
 	}
-
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 end*/
 	sc_select_charging_current(info, pdata);
 
+/*N17 code for HQ-299665 by miaozhichao at 2023/6/14 start*/
+	if (!info->bat_psy)
+		info->bat_psy = power_supply_get_by_name("battery");
+	if (IS_ERR_OR_NULL(info->bat_psy)) {
+		chr_err("%s: devm power fail to get bat_psy\n", __func__);
+		goto done;
+	}
+	power_supply_get_property(info->bat_psy,
+			POWER_SUPPLY_PROP_ENERGY_FULL, &val_full);
+	chr_err("val_full :%d\n", val_full.intval);
+	if (val_full.intval == true)
+		pdata->charging_current_limit = 0;
+/*N17 code for HQ-299665 by miaozhichao at 2023/6/14 end*/
+
+	if (!pe5_alg)
+		pe5_alg = get_chg_alg_by_name("pe5");
+	if (!pe5_alg) {
+		chr_err("get pe5 algo fail\n");
+		goto done;
+	}
+
+/* N17 code for HQ-299825 by tongjiacheng at 20230616 start */
+	ret = power_supply_get_property(info->bat_psy,
+			POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX, &val);
+	if (ret < 0)
+		chr_err("get call mode fail\n");
+
+	if (val.intval != 0) {	//phone mode, all type need set ibat limit to 500mA
+		pdata->charging_current_limit = 500000;
+		if (level < 15)
+			level = 14;
+	}
+/* N17 code for HQ-299825 by tongjiacheng at 20230616 end */
+
+/* N17 code for HQ-292280 by tongjiacheng at 20230610 start */
+	if (level != 0) {
+		if (info->ta_capability == APDO_TA) {
+/*N17 code for low_fast by xm liluting at 2023/07/07 start*/
+                        psy = info->bat_psy;
+		        if (psy != NULL) {
+                                bm = power_supply_get_drvdata(psy);
+                                if (bm != NULL){
+                                        low_fast_enable = bm->gm1->smart_charge[SMART_CHG_LOW_FAST].en_ret;
+                                } else {
+                                        chr_err("%s failed to get mtk_battery drvdata\n", __func__);
+                                }
+                        } else {
+                                chr_err("%s failed to get battery psy\n", __func__);
+                        }
+                        ret = power_supply_get_property(info->bat_psy, POWER_SUPPLY_PROP_CAPACITY, &val_capacity);
+                        if((val_capacity.intval <= 40) && (info->first_low_plugin_flag) && low_fast_enable) {
+                                blankState = info->sm.screen_state;
+                                chr_err("%s capacity = %d, level = %d, first_low_plugin_flag = %d, low_fast_enable = %d, blankState = %d, b_flag = %d\n", __func__, val_capacity.intval, level, info->first_low_plugin_flag, low_fast_enable, blankState, info->b_flag);
+                                //info->sm.screen_state 0:bright, 1:black
+                                if(info->b_flag == NORMAL && !blankState) {  //black to bright
+                                        info->b_flag = BLACK_TO_BRIGHT;
+                                        time_last = ktime_get_seconds();
+                                        fast_flag = true;
+                                        chr_err("%s switch to bright time_last = %lld\n", __func__, time_last);
+                                }
+                                else if((info->b_flag == BLACK_TO_BRIGHT || info->b_flag == BRIGHT) && !blankState) {  //still bright
+                                        info->b_flag = BRIGHT;
+                                        time_now = ktime_get_seconds();
+                                        delta_time = time_now - time_last;
+                                        chr_err("%s still_bright time_now = %lld, time_last = %lld, delta_time = %lld\n", __func__, time_now, time_last, delta_time);
+                                        if(delta_time <= 15) {
+                                                fast_flag = true;
+                                                chr_err("%s still_bright delta_time = %lld, stay fast\n", __func__, delta_time);
+                                        }
+                                        else {
+                                                fast_flag = false;
+                                                chr_err("%s still_bright delta_time = %lld, exit fast\n", __func__, delta_time);
+                                        }
+                                }
+                                else { //black
+                                        info->b_flag = BLACK;
+                                        fast_flag = true;
+                                        chr_err("%s black delta_time = %lld stay fast\n", __func__, delta_time);
+                                }
+
+                                /*avoid thermal_board_temp raise too fast*/
+                                if((last_level == 8) && (level == 5) && (info->thermal_board_temp > 410)){
+                                        hot_flag = true;
+                                        fast_flag = false;
+                                        chr_err("%s avoid thermal_board_temp raise too fast, exit fast mode\n", __func__);
+                                }
+                                else if((last_level == 5) && ((level == 5) || (level == 8)) && hot_flag && (info->thermal_board_temp > 410)){
+                                        fast_flag = false;
+                                }
+                                else{
+                                        hot_flag = false;
+                                }
+
+                                if(info->thermal_board_temp > 420){
+                                        fast_flag = false;
+                                }
+
+                                if(fast_flag) {  //stay fast strategy
+                                        info->pps_fast_mode = true;
+                                        thermal_vote_current = thermal_mitigation_pps_fast[level];
+
+                                        if((val_capacity.intval > 38) && (info->thermal_board_temp > 380)){
+                                                if(thermal_vote_current >= 5550000){
+                                                        thermal_vote_current -= 3300000;
+                                                }
+                                                else{
+                                                        thermal_vote_current = 2250000;
+                                                }
+                                                chr_err("%s stay fast but decrease 3, info->thermal_board_temp = %d, thermal_vote_current = %d\n", __func__, info->thermal_board_temp, thermal_vote_current);
+                                        }
+                                        else if(info->thermal_board_temp > 410){
+                                                if(thermal_vote_current >= 5250000){
+                                                        thermal_vote_current -= 3000000;
+                                                }
+                                                else{
+                                                        thermal_vote_current = 2250000;
+                                                }
+                                                chr_err("%s stay fast but decrease 3, info->thermal_board_temp = %d, thermal_vote_current = %d\n", __func__, info->thermal_board_temp, thermal_vote_current);
+                                        }
+                                        else if(info->thermal_board_temp > 400){
+                                                if(thermal_vote_current >= 3250000){
+                                                        thermal_vote_current -= 1500000;
+                                                }
+                                                else{
+                                                        thermal_vote_current = 2250000;
+                                                }
+                                                chr_err("%s stay fast but decrease 1.5, info->thermal_board_temp = %d, thermal_vote_current = %d\n", __func__, info->thermal_board_temp, thermal_vote_current);
+                                        }
+                                        else if((val_capacity.intval > 30) && (val_capacity.intval < 39) && (info->thermal_board_temp < 390)){
+                                                if(thermal_vote_current <= 4000000){
+                                                        thermal_vote_current += 2000000;
+                                                }
+                                                else{
+                                                        thermal_vote_current = 6000000;
+                                                }
+                                                chr_err("%s stay fast but add 2, info->thermal_board_temp = %d, thermal_vote_current = %d\n", __func__, info->thermal_board_temp, thermal_vote_current);
+                                        }
+                                        else if((val_capacity.intval > 25) && ((val_capacity.intval <= 30)) && (info->thermal_board_temp < 400)){
+                                                if(thermal_vote_current <= 2000000){
+                                                        thermal_vote_current += 3000000;
+                                                }
+                                                else{
+                                                        thermal_vote_current = 6000000;
+                                                }
+                                                chr_err("%s stay fast but add 3, info->thermal_board_temp = %d, thermal_vote_current = %d\n", __func__, info->thermal_board_temp, thermal_vote_current);
+                                        }
+                                        chr_err("%s stay fast, thermal_vote_current = %d\n", __func__, thermal_vote_current);
+                                }
+                                else { //exit fast strategy
+                                        info->pps_fast_mode = false;
+                                        thermal_vote_current = thermal_mitigation_pps[level];
+                                        chr_err("%s exit fast, thermal_vote_current = %d\n", __func__, thermal_vote_current);
+                                }
+                        }
+                        else { //capacity > 40, or low_fast was not triggered, use default strategy
+                                info->b_flag = NROMAL;
+                                info->pps_fast_mode = false;
+                                thermal_vote_current = thermal_mitigation_pps[level];
+                                chr_err("%s use default strategy, info->thermal_board_temp = %d, thermal_vote_current = %d\n", __func__, info->thermal_board_temp, thermal_vote_current);
+                        }
+/*N17 code for cp_mode test by xm liluting at 2023/07/31 start*/
+                        if(info->fake_thermal_vote_current > 0){
+                                thermal_vote_current = info->fake_thermal_vote_current;
+                        }
+                        last_level = level;
+/*N17 code for cp_mode test by xm liluting at 2023/07/31 end*/
+/*N17 code for low_fast by xm liluting at 2023/07/07 end*/
+			pdata_dvchg->thermal_input_current_limit =
+				thermal_vote_current / 2;
+
+			if (pdata_dvchg->thermal_input_current_limit  < 1050000) { //退出PE5，设置swchg thermal
+				pdata->thermal_charging_current_limit =
+					thermal_vote_current;
+	/* N17 code for HQHW-4275 by tongjiacheng at 20230625 start */
+				if (chg_alg_is_algo_running(pe5_alg)) {
+					pe5_thermal_stop = true;
+	/* N17 code for HQHW-4275 by tongjiacheng at 20230625 end */
+        /*N17 code for HQHW-4632 by tongjiacheng at 20230718 start*/
+					chg_alg_stop_algo(pe5_alg);
+        /*N17 code for HQHW-4632 by tongjiacheng at 20230718 end*/
+				}
+	/* N17 code for HQHW-4275 by tongjiacheng at 20230627 start */
+				is_basic = true;
+	/* N17 code for HQHW-4275 by tongjiacheng at 20230627 end */
+			}
+			else {
+/*N17 code for low_fast by xm liluting at 2023/07/26 start*/
+                                if((val_capacity.intval <= 40) && (info->first_low_plugin_flag) && low_fast_enable && (pdata_dvchg->thermal_input_current_limit > 1050000)){
+                                        chg_alg_start_algo(pe5_alg);
+                                }
+/*N17 code for low_fast by xm liluting at 2023/07/26 end*/
+				pdata->thermal_charging_current_limit = -1;
+				/* N17 code for HQHW-4275 by tongjiacheng at 20230625 start */
+				if (!chg_alg_is_algo_running(pe5_alg) &&
+					pe5_thermal_stop) { //唤醒PE5
+			/* N17 code for HQHW-4275 by tongjiacheng at 20230627 start */
+					chg_alg_start_algo(pe5_alg);
+					is_basic = false;
+			/* N17 code for HQHW-4275 by tongjiacheng at 20230627 end */
+					pe5_thermal_stop = false;
+				}
+				/* N17 code for HQHW-4275 by tongjiacheng at 20230625 end */
+			}
+		/* N17 code for HQHW-4815 by p-xuyechen at 2023/8/15 end */
+		} else if (info->chr_type == POWER_SUPPLY_TYPE_USB_ACA ||
+					info->ta_capability == WO_APDO_TA)
+		/* N17 code for HQHW-4815 by p-xuyechen at 2023/8/15 end */
+			pdata->thermal_charging_current_limit =
+				thermal_mitigation_qc[level];
+	}
+	else {
+/*N17 code for HQHW-4632 by tongjiacheng at 20230718 start*/
+		if (!chg_alg_is_algo_running(pe5_alg) &&
+			pe5_thermal_stop &&
+			info->ta_capability == APDO_TA) {
+			chg_alg_start_algo(pe5_alg);
+			is_basic = false;
+			pe5_thermal_stop = false;
+		}
+/*N17 code for HQHW-4632 by tongjiacheng at 20230718 end*/
+		pdata->thermal_charging_current_limit = -1;
+		pdata_dvchg->thermal_input_current_limit = -1;
+	}
+/* N17 code for HQ-292280 by tongjiacheng at 20230610 end */
 	if (pdata->thermal_charging_current_limit != -1) {
 		if (pdata->thermal_charging_current_limit <=
 			pdata->charging_current_limit) {
@@ -414,7 +750,7 @@ done:
 		is_basic = true;
 	}
 	/* For TC_018, pleasae don't modify the format */
-	chr_err("m:%d chg1:%d,%d,%d,%d chg2:%d,%d,%d,%d dvchg1:%d sc:%d %d %d type:%d:%d usb_unlimited:%d usbif:%d usbsm:%d ii:%d,%d aicl:%d atm:%d bm:%d b:%d\n",
+	chr_err("m:%d chg1:%d,%d,%d,%d chg2:%d,%d,%d,%d dvchg1:%d sc:%d %d %d type:%d:%d usb_unlimited:%d usbif:%d usbsm:%d aicl:%d atm:%d bm:%d b:%d is_mtbf:%d\n",
 		info->config,
 		_uA_to_mA(pdata->thermal_input_current_limit),
 		_uA_to_mA(pdata->thermal_charging_current_limit),
@@ -431,10 +767,8 @@ done:
 		info->chr_type, info->ta_status[info->select_adapter_idx],
 		info->usb_unlimited,
 		IS_ENABLED(CONFIG_USBIF_COMPLIANCE), info->usb_state,
-		_uA_to_mA(pdata->usb_input_current_limit),
-		_uA_to_mA(pdata->pd_input_current_limit),
 		pdata->input_current_limit_by_aicl, info->atm_enabled,
-		info->bootmode, is_basic);
+		info->bootmode, is_basic, info->is_mtbf);
 
 	return is_basic;
 }
@@ -444,6 +778,10 @@ static int do_algorithm(struct mtk_charger *info)
 	struct chg_alg_device *alg;
 	struct charger_data *pdata;
 	struct chg_alg_notify notify;
+/*N17 code for HQ-306722 by xm tianye9 at 2023/07/08 start*/
+	struct mtk_battery_manager *bm;
+	struct power_supply *psy = NULL;
+/*N17 code for HQ-306722 by xm tianye9 at 2023/07/08 end*/
 	bool is_basic = true;
 	bool chg_done = false;
 	bool cs_chg_done = false;
@@ -453,10 +791,22 @@ static int do_algorithm(struct mtk_charger *info)
 	int lst_rnd_alg_idx = info->lst_rnd_alg_idx;
 	int vbat = 0, vbat_cs = 0, ibat_cs = 0;
 	int cs_ir_cmp = 0;
+	union power_supply_propval pval;
+	/* N17 code for HQHW-5009 by p-xuyechen at 2023/8/18 */
+	struct chg_alg_device *alg_pd = NULL;
+/* N17 code for HQ-308497 by miaozhichao at 20230722 start */
+	if (!info->bat_psy)
+		info->bat_psy = power_supply_get_by_name("battery");
+	if (!info->bat_psy)
+		return -ENODEV;
+/* N17 code for HQ-308497 by miaozhichao at 20230722 end */
 
 	pdata = &info->chg_data[CHG1_SETTING];
 	charger_dev_is_charging_done(info->chg1_dev, &chg_done);
 	is_basic = select_charging_current_limit(info, &info->setting);
+	alg = get_chg_alg_by_name("pe5");
+
+	ret = power_supply_get_property(info->bat_psy, POWER_SUPPLY_PROP_CAPACITY, &pval);
 
 	if (info->cschg1_dev && info->cs_with_gauge
 		&& !info->cs_hw_disable) {
@@ -498,7 +848,13 @@ static int do_algorithm(struct mtk_charger *info)
 			info->polling_interval = CHARGING_FULL_INTERVAL;
 			charger_cs_enable_lowpower(info->cschg1_dev, 1);
 			chr_err("%s battery full\n", __func__);
-		} else {
+			/* gold: full only at 100% */
+			if (pval.intval == 100) {
+				info->is_full_flag = true;
+				chr_err("%s battery full, is_full_flag = %d\n", __func__, info->is_full_flag);
+			}
+		} else if (pval.intval < 100) {
+			/* gold: recharge only below 100% */
 			charger_dev_do_event(info->chg1_dev, EVENT_RECHARGE, 0);
 			info->polling_interval = CHARGING_INTERVAL;
 			charger_cs_enable_lowpower(info->cschg1_dev, 0);
@@ -611,6 +967,16 @@ static int do_algorithm(struct mtk_charger *info)
 					if (lst_rnd_alg_idx != i && lst_rnd_alg_idx < MAX_ALG_NO)
 						chg_alg_stop_algo(info->alg[lst_rnd_alg_idx]);
 				}
+				//chg_alg_set_setting(alg, &info->setting);
+				/* N17 code for HQHW-5009 by p-xuyechen at 2023/8/18 start */
+				if (i == 0) {
+					alg_pd = get_chg_alg_by_name("pd");
+					if (alg_pd && (chg_alg_is_algo_ready(alg_pd) == ALG_RUNNING)) {
+						chr_err("pe5 is ready or running, stop pd algo\n");
+						chg_alg_stop_algo(alg_pd);
+					}
+				}
+				/* N17 code for HQHW-5009 by p-xuyechen at 2023/8/18 end */
 				chg_alg_start_algo(alg);
 				chr_err("%s: %d, %d.\n", __func__, ret, info->cs_hw_disable);
 				if (ret == (int) ALG_RUNNING && info->cschg1_dev && !info->cs_hw_disable) {
@@ -643,6 +1009,13 @@ static int do_algorithm(struct mtk_charger *info)
 					dev_name(&alg->dev), val);
 			}
 		}
+		/* N17 code for HQHW-5009 by p-xuyechen at 2023/8/18 start */
+		alg_pd = get_chg_alg_by_name("pd");
+		if (alg_pd && (chg_alg_is_algo_ready(alg_pd) == ALG_RUNNING)) {
+			chr_err("is_basic is change to false, stop pd algo\n");
+			chg_alg_stop_algo(alg_pd);
+		}
+		/* N17 code for HQHW-5009 by p-xuyechen at 2023/8/18 end */
 	}
 	info->is_chg_done = chg_done;
 
@@ -677,13 +1050,22 @@ static int do_algorithm(struct mtk_charger *info)
 			info->setting.vbat_mon_en);
 		if (info->old_cv == 0 || (info->old_cv != info->setting.cv)
 		    || info->setting.vbat_mon_en == 0) {
-			charger_dev_enable_6pin_battery_charging(
-				info->chg1_dev, false);
-			charger_dev_set_constant_voltage(info->chg1_dev,
-				info->setting.cv);
-			if (info->setting.vbat_mon_en && info->stop_6pin_re_en != 1)
-				charger_dev_enable_6pin_battery_charging(
-					info->chg1_dev, true);
+			charger_dev_enable_6pin_battery_charging(info->
+								 chg1_dev,
+								 false);
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 start*/
+			if (info->ta_capability != APDO_TA) {
+				charger_dev_set_constant_voltage(info->
+								 chg1_dev,
+								 info->
+								 setting.
+								 cv);
+			}
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 end*/
+			if (info->setting.vbat_mon_en
+			    && info->stop_6pin_re_en != 1)
+				charger_dev_enable_6pin_battery_charging
+				    (info->chg1_dev, true);
 			info->old_cv = info->setting.cv;
 		} else {
 			if (info->setting.vbat_mon_en && info->stop_6pin_re_en != 1) {
@@ -704,10 +1086,34 @@ static int do_algorithm(struct mtk_charger *info)
 		ret2 = chg_alg_is_algo_ready(alg);
 		alg = get_chg_alg_by_name("hvbp");
 		ret3 = chg_alg_is_algo_ready(alg);
+
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 start*/
+/*N17 code for HQ-306722 by xm tianye9 at 2023/07/08 start*/
+		psy = power_supply_get_by_name("battery");
+		if (psy != NULL) {
+			bm = power_supply_get_drvdata(psy);
+			if (bm != NULL){
+				chr_err("N17 get mtk_battery drvdata success in %s\n", __func__);
+			}
+		} else
+			return 0;
+		chr_err("xm %s enable charger ret = %d, active_status = %d\n", __func__, ret, bm->gm1->smart_charge[SMART_CHG_NAVIGATION].active_status);
+/*N17 code for HQ-306722 by xm tianye9 at 2023/07/08 end*/
 		if (!(ret == (int) ALG_READY || ret == (int) ALG_RUNNING) &&
 			!(ret2 == (int) ALG_READY || ret2 == (int) ALG_RUNNING) &&
-			!(ret3 == (int) ALG_READY || ret3 == (int) ALG_RUNNING))
+			!(ret3 == (int) ALG_READY || ret3 == (int) ALG_RUNNING)
+/*N17 code for HQ-306722 by xm tianye9 at 2023/07/08 start*/
+/*N17 code for HQHW-4654 by tongjiacheng at 2023/08/04 start*/
+			&& !bm->gm1->smart_charge[SMART_CHG_NAVIGATION].active_status && !chg_done &&
+			/*N17 code for HQ-314179 by hankang at 2023/08/31 start*/
+			info->sw_jeita.charging == true){
+			/*N17 code for HQ-314179 by hankang at 2023/08/31 end*/
+/*N17 code for HQHW-4654 by tongjiacheng at 2023/08/04 end*/
+/*N17 code for HQ-306722 by xm tianye9 at 2023/07/08 end*/
 			charger_dev_enable(info->chg1_dev, true);
+			chr_err("xm %s enable charger ret = %d\n", __func__, ret);
+		}
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 end*/
 	}
 
 	if (info->chg1_dev != NULL) {
@@ -731,9 +1137,23 @@ static int enable_charging(struct mtk_charger *info,
 {
 	int i;
 	struct chg_alg_device *alg;
-
+/*N17 code for HQ-306722 by xm tianye9 at 2023/07/08 start*/
+	struct mtk_battery_manager *bm = NULL;
+	struct power_supply *psy = NULL;
+/*N17 code for HQ-306722 by xm tianye9 at 2023/07/08 end*/
 
 	chr_err("%s %d\n", __func__, en);
+
+/*N17 code for HQ-306722 by xm tianye9 at 2023/07/08 start*/
+	psy = power_supply_get_by_name("battery");
+	if (psy != NULL) {
+		bm = (struct mtk_battery_manager *)power_supply_get_drvdata(psy);
+		if (bm != NULL){
+			chr_err("N17 get mtk_battery drvdata success in %s\n", __func__);
+		}
+	} else
+		return 0;
+/*N17 code for HQ-306722 by xm tianye9 at 2023/07/08 end*/
 
 	if (en == false) {
 		for (i = 0; i < MAX_ALG_NO; i++) {
@@ -745,7 +1165,16 @@ static int enable_charging(struct mtk_charger *info,
 		charger_dev_enable(info->chg1_dev, false);
 		charger_dev_do_event(info->chg1_dev, EVENT_DISCHARGE, 0);
 	} else {
-		charger_dev_enable(info->chg1_dev, true);
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 start*/
+/*N17 code for HQ-306722 by xm tianye9 at 2023/07/08 start*/
+	chr_err("xm in %s enable charger, active_status = %d\n", __func__,
+			bm->gm1->smart_charge[SMART_CHG_NAVIGATION].active_status);
+		if (!bm->gm1->smart_charge[SMART_CHG_NAVIGATION].active_status){
+/*N17 code for HQ-306722 by xm tianye9 at 2023/07/08 end*/
+			charger_dev_enable(info->chg1_dev, true);
+			chr_err("xm %s enable charger\n", __func__);
+		}
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 end*/
 		charger_dev_do_event(info->chg1_dev, EVENT_RECHARGE, 0);
 	}
 

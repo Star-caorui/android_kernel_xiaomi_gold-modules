@@ -64,6 +64,9 @@
 /* dependent on platform */
 #include "mtk_charger.h"
 
+/* N17 code for HQHW-5241 by p-xuyechen at 2023/9/11 */
+#define ADC_GET_RETRY_TIME 5
+
 struct pd_hal {
 	struct charger_device *chg1_dev;
 	struct charger_device *chg2_dev;
@@ -140,9 +143,11 @@ int pd_hal_is_adapter_ready(struct chg_alg_device *alg)
 		if (info->select_adapter) {
 			pd_dbg("%s ta_cap:%d\n", __func__, info->ta_capability);
 			hal->adapter = info->select_adapter;
-			if (info->ta_capability == APDO_TA)
+			/* N17 code for HQHW-4815: PE5 takes the PPS adapters */
+			if (info->ta_capability == WO_APDO_TA)
 				return ALG_READY;
-			else
+			else if (info->ta_capability == APDO_TA ||
+				 info->ta_capability == ONLY_APDO_TA)
 				return ALG_TA_NOT_SUPPORT;
 		}
 	}
@@ -224,14 +229,28 @@ int pd_hal_get_vbus(struct chg_alg_device *alg)
 int pd_hal_get_ibus(struct chg_alg_device *alg, int *ibus)
 {
 	int ret = 0;
+	/* N17 code for HQHW-5241 by p-xuyechen at 2023/9/11 */
+	int retry = 0;
 	struct pd_hal *hal;
 
 	if (alg == NULL)
 		return -EINVAL;
 	hal = chg_alg_dev_get_drv_hal_data(alg);
-	ret = charger_dev_get_ibus(hal->chg1_dev, ibus);
+
+	/* N17 code for HQHW-5241 by p-xuyechen at 2023/9/11 start */
+	while (retry < ADC_GET_RETRY_TIME) {
+		ret = charger_dev_get_ibus(hal->chg1_dev, ibus);
+		if (ret == 0)
+			break;
+		retry++;
+	}
+
+	if (retry > 0)
+		pd_err("%s: get ibus retry = %d \n", __func__, retry);
+	/* N17 code for HQHW-5241 by p-xuyechen at 2023/9/11 end */
+
 	if (ret < 0)
-		pd_err("%s: get vbus failed: %d\n", __func__, ret);
+		pd_err("%s: get ibus failed: %d\n", __func__, ret);
 
 	return ret;
 }

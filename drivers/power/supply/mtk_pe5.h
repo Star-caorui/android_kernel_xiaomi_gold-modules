@@ -157,6 +157,14 @@ struct pe50_algo_data {
 	u32 r_bat;
 	u32 r_total;
 	u32 ita_lmt;
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 start*/
+	u32 ita_jeita;
+	u32 state_jeita;
+	u32 cv_jeita;
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 end*/
+/* N17 code for HQ-305663 by tongjiacheng at 20230710 start */
+	u32 ita;
+/* N17 code for HQ-305663 by tongjiacheng at 20230710 end */
 	u32 ita_pwr_lmt;
 	u32 cv_lower_bound;
 	u32 err_retry_cnt;
@@ -177,6 +185,16 @@ struct pe50_algo_data {
 	int input_current_limit;
 	int cv_limit;
 	u32 start_soc_max;		/* algo start soc upper bound */
+/*N17 code for HQ-307853 by xm tianye9 at 2023/07/17 start*/
+	bool	switch_mode;
+	bool	switch2_1_single_enable;
+	bool	switch1_1_single_enable;
+	int		div_rate;
+	int		ibat_limit;
+	int		cp_mode;
+/*N17 code for HQ-307853 by xm tianye9 at 2023/07/17 end*/
+	/* N17 code for HQ-311096 by p-gucheng at 2023/08/09 */
+	bool cp_charge_finish;
 };
 
 /* Setting from dtsi */
@@ -236,6 +254,15 @@ struct pe50_algo_info {
 	struct chg_alg_device *alg;
 	struct pe50_algo_desc *desc;
 	struct pe50_algo_data *data;
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 start*/
+	struct smart_chg *smart_charge;
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 end*/
+/*N17 code for HQ-307853 by xm tianye9 at 2023/07/17 start*/
+	struct delayed_work xm_monitor_flash_chg_statue_work;
+/*N17 code for HQ-307853 by xm tianye9 at 2023/07/17 end*/
+/*N17 code for HQ-308229 by xm tianye9 at 2023/07/20 start*/
+	bool cp_stop_flag;
+/*N17 code for HQ-308229 by xm tianye9 at 2023/07/19 end*/
 };
 
 static inline u32 precise_div(u64 dividend, u64 divisor)
@@ -307,6 +334,8 @@ extern int pe50_hal_reset_vbusovp_alarm(struct chg_alg_device *alg,
 extern int pe50_hal_get_adc(struct chg_alg_device *alg, enum chg_idx chgidx,
 			    enum pe50_adc_channel chan, int *val);
 extern int pe50_hal_get_soc(struct chg_alg_device *alg, u32 *soc);
+extern int pe50_hal_set_mivr(struct chg_alg_device *alg, enum chg_idx chgidx,
+			     u32 uV);
 extern int pe50_hal_is_adapter_ready(struct chg_alg_device *alg);
 extern int pe50_hal_set_ichg(struct chg_alg_device *alg, enum chg_idx chgidx,
 			     u32 mA);
@@ -322,4 +351,15 @@ extern int pe50_hal_get_adc_accuracy(struct chg_alg_device *alg,
 				     enum chg_idx chgidx,
 				     enum pe50_adc_channel chan, int *val);
 extern int pe50_hal_init_chip(struct chg_alg_device *alg, enum chg_idx chgidx);
+/*N17 code for HQ-307853 by xm tianye9 at 2023/07/17 start*/
+extern int pe50_hal_get_work_mode_by_xm(struct chg_alg_device *alg, enum chg_idx chgidx, int *work_mode);
+extern int pe50_hal_set_work_mode_by_xm(struct chg_alg_device *alg, enum chg_idx chgidx, int work_mode);
+int xm_get_ibat_lmt(struct pe50_algo_info *info);
+/*N17 code for HQ-307853 by xm tianye9 at 2023/07/17 end*/
+/*N17 code for HQ-309331 by xm tianye9 at 2023/07/27 start*/
+extern int pe50_hal_get_cp_device_by_xm(struct chg_alg_device *alg, enum chg_idx chgidx);
+/*N17 code for HQ-309331 by xm tianye9 at 2023/07/27 end*/
+/*N17 code for HQHW-4862 by yeyinzi at 2023/08/15 start*/
+extern int pe50_hal_enable_termination(struct chg_alg_device *alg, enum chg_idx chgidx, bool en);
+/*N17 code for HQHW-4862 by yeyinzi at 2023/08/15 end*/
 #endif /* __MTK_PE5_H */
