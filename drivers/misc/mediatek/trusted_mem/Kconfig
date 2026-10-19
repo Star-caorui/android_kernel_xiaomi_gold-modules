@@ -28,6 +28,17 @@ config MTK_SECURE_MEM_SUPPORT
 	  Say Y if you would like to enable this feature.
 	  If unsure, say N.
 
+config MTK_SEC_VIDEO_PATH_SUPPORT
+	bool "MTK secure video path without a TEE client"
+	depends on MTK_SECURE_MEM_SUPPORT
+	help
+	  Reserve the SVP region from the device tree and have the secure
+	  memory regions set up the IOMMU's secure side as they come online,
+	  as the Trustonic and Microtrust builds do, on a device whose only
+	  secure OS is GenieZone.
+	  The SSMR code tests this option already.
+	  If unsure, say N.
+
 config MTK_WFD_SMEM_SUPPORT
 	bool "MTK WFD SECURE Memory Support"
 	default y

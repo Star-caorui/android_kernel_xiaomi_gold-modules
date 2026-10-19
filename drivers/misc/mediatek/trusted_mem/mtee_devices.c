@@ -50,7 +50,8 @@ static struct tmem_device_description mtee_mchunks[] = {
 		.mtee_chunks_id = MTEE_MCHUNKS_SVP,
 		.ssmr_feature_id = SSMR_FEAT_SVP_REGION,
 		.u_ops_data.mtee = {.mem_type = TRUSTED_MEM_SVP_REGION},
-#if IS_ENABLED(CONFIG_TRUSTONIC_TEE_SUPPORT) || \
+#if IS_ENABLED(CONFIG_MTK_SEC_VIDEO_PATH_SUPPORT) || \
+	IS_ENABLED(CONFIG_TRUSTONIC_TEE_SUPPORT) || \
 	IS_ENABLED(CONFIG_MICROTRUST_TEE_SUPPORT)
 		.notify_remote = true,
 		.notify_remote_fn = secmem_fr_set_svp_region,
@@ -69,7 +70,8 @@ static struct tmem_device_description mtee_mchunks[] = {
 		.mtee_chunks_id = MTEE_MCHUNKS_PROT,
 		.ssmr_feature_id = SSMR_FEAT_PROT_REGION,
 		.u_ops_data.mtee = {.mem_type = TRUSTED_MEM_PROT_REGION},
-#if IS_ENABLED(CONFIG_TRUSTONIC_TEE_SUPPORT) || \
+#if IS_ENABLED(CONFIG_MTK_SEC_VIDEO_PATH_SUPPORT) || \
+	IS_ENABLED(CONFIG_TRUSTONIC_TEE_SUPPORT) || \
 	IS_ENABLED(CONFIG_MICROTRUST_TEE_SUPPORT)
 		.notify_remote = true,
 		.notify_remote_fn = secmem_fr_set_prot_shared_region,
@@ -89,7 +91,8 @@ static struct tmem_device_description mtee_mchunks[] = {
 		.mtee_chunks_id = MTEE_MCHUNKS_WFD,
 		.ssmr_feature_id = SSMR_FEAT_WFD_REGION,
 		.u_ops_data.mtee = {.mem_type = TRUSTED_MEM_WFD_REGION},
-#if IS_ENABLED(CONFIG_TRUSTONIC_TEE_SUPPORT) || \
+#if IS_ENABLED(CONFIG_MTK_SEC_VIDEO_PATH_SUPPORT) || \
+	IS_ENABLED(CONFIG_TRUSTONIC_TEE_SUPPORT) || \
 	IS_ENABLED(CONFIG_MICROTRUST_TEE_SUPPORT)
 		.notify_remote = true,
 		.notify_remote_fn = secmem_fr_set_wfd_region,
