@@ -44,7 +44,6 @@
 #include <asm/traps.h>
 #include <asm/cacheflush.h>
 #include <asm/kexec.h>
-#include <linux/oom.h>
 
 #include <mt-plat/aee.h>
 #if IS_ENABLED(CONFIG_MTK_AEE_IPANIC)
@@ -165,6 +164,7 @@ int __access_remote_vm_for_hang(struct mm_struct *mm, unsigned long addr, void *
 			if (vma->vm_ops && vma->vm_ops->access)
 				bytes = vma->vm_ops->access(vma, addr, buf, len, 0);
 #endif
+			pr_debug("[%s:%d]: access bytes: %d\n",__func__, __LINE__, bytes);
 			if (bytes <= 0)
 				break;
 		} else {
@@ -293,84 +293,6 @@ int add_white_list(char *name)
 	raw_spin_unlock(&white_list_lock);
 	return 0;
 }
-
-#define CONVERT_ADJ(x) ((x * OOM_SCORE_ADJ_MAX) / -OOM_DISABLE)
-#define REVERT_ADJ(x)  (x * (-OOM_DISABLE + 1) / OOM_SCORE_ADJ_MAX)
-  /*
-   * The process p may have detached its own ->mm while exiting or through
-   * kthread_use_mm(), but one or more of its subthreads may still have a valid
-   * pointer.  Return p, or any of its subthreads with a valid ->mm, with
-   * task_lock() held.
-   */
-struct task_struct *find_lock_task_mm(struct task_struct *p)
-{
-    struct task_struct *t;
-
-    rcu_read_lock();
-
-    for_each_thread(p, t) {
-  	    task_lock(t);
-  	    if (likely(t->mm))
-                    goto found;
-  	    task_unlock(t);
-    }
-    t = NULL;
-found:
-    rcu_read_unlock();
-
-    return t;
-}
-
-static int dump_processes(void)
-{
-    int i, j;
-    int score_adj[37]={0};
-    //long score_adj_pss[37]={0};
-    short oom_score_adj;
-    struct task_struct *tsk;
-
-    for(i = 0, j=-18; i < 37; i++, j++)
-        score_adj[i] = CONVERT_ADJ(j);
-
-    printk("======   hang detect show processes   =====\n");
-#ifdef CONFIG_ZRAM
-    printk(" [pid]  adj    score_adj   rss    rswap      name\n");
-#else
-    printk(" [pid]  adj    score_adj   rss      name\n");
-#endif
-
-    rcu_read_lock();
-    for_each_process(tsk) {
-        struct task_struct *p;
-
-        if (tsk->flags & PF_KTHREAD)
-            continue;
-
-        p = find_lock_task_mm(tsk);
-        if (!p)
-            continue;
-
-        oom_score_adj = p->signal->oom_score_adj;
-
-        printk(
-
-#ifdef CONFIG_ZRAM
-                " [%5d] %5d%11d%8lu%8lu        %s\n", p->pid,
-                REVERT_ADJ(oom_score_adj), oom_score_adj,
-                get_mm_rss(p->mm),
-                get_mm_counter(p->mm, MM_SWAPENTS), p->comm);
-#else /* CONFIG_ZRAM */
-                " [%5d] %5d%11d%8lu        %s\n", p->pid,
-                REVERT_ADJ(oom_score_adj), oom_score_adj,
-                get_mm_rss(p->mm), p->comm);
-#endif
-        task_unlock(p);
-    }
-    rcu_read_unlock();
-
-    return 0;
-}
-
 
 /******************************************************************************
  * aee_get_cmdline is a copy of get_cmdline in mm/util.c, please pay attension to
@@ -944,11 +866,7 @@ static void get_kernel_bt(struct task_struct *tsk)
 	int nr_entries;
 	int i;
 
-#ifndef __aarch64__
-	nr_entries = stack_trace_save_tsk(tsk, stacks, ARRAY_SIZE(stacks), 0);
-#else
 	nr_entries = hang_kernel_trace(tsk, stacks, ARRAY_SIZE(stacks));
-#endif
 	for (i = 0; i < nr_entries; i++) {
 		log_hang_info("<%lx> %pS\n", (long)stacks[i],
 				(void *)stacks[i]);
@@ -1785,7 +1703,6 @@ static void show_status(int flag)
 	if (Hang_first_done)	{ /* the last dump */
 		/* debug_locks = 1; */
 		debug_show_all_locks();
-		dump_processes();
 		run_callback();
 
 	}
