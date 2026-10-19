@@ -235,6 +235,8 @@ static int get_cpu_loading(struct cpu_info *_ci)
 	return 0;
 }
 
+
+
 inline bool launch_turbo_enable(void);
 
 void exp_trace_turbo_vip(const char *desc, int pid)
@@ -285,6 +287,7 @@ static int update_win_pid_status(const char *buf, const struct kernel_param *kp)
 	return 0;
 }
 
+
 static const struct kernel_param_ops update_win_pid_status_ops = {
 	.set = update_win_pid_status,
 	.get = param_get_charp,
@@ -323,6 +326,7 @@ static int enable_tt_vip(const char *buf, const struct kernel_param *kp)
 	return retval;
 }
 
+
 static const struct kernel_param_ops enable_tt_vip_ops = {
 	.set = enable_tt_vip,
 	.get = param_get_int,
@@ -360,6 +364,7 @@ static int enable_tgd(const char *buf, const struct kernel_param *kp)
 	return retval;
 }
 
+
 static const struct kernel_param_ops enable_tgd_ops = {
 	.set = enable_tgd,
 	.get = param_get_int,
@@ -393,6 +398,7 @@ static int set_tgd(const char *buf, const struct kernel_param *kp)
 
 	return retval;
 }
+
 
 static const struct kernel_param_ops set_tgd_ops = {
 	.set = set_tgd,
@@ -428,6 +434,7 @@ static int unset_tgd(const char *buf, const struct kernel_param *kp)
 	return retval;
 }
 
+
 static const struct kernel_param_ops unset_tgd_ops = {
 	.set = unset_tgd,
 	.get = param_get_int,
@@ -462,6 +469,7 @@ static int set_td(const char *buf, const struct kernel_param *kp)
 	return retval;
 }
 
+
 static const struct kernel_param_ops set_td_ops = {
 	.set = set_td,
 	.get = param_get_int,
@@ -495,6 +503,7 @@ static int unset_td(const char *buf, const struct kernel_param *kp)
 
 	return retval;
 }
+
 
 static const struct kernel_param_ops unset_td_ops = {
 	.set = unset_td,
@@ -535,6 +544,7 @@ static int set_tdtgd(const char *buf, const struct kernel_param *kp)
 	return retval;
 }
 
+
 static const struct kernel_param_ops set_tdtgd_ops = {
 	.set = set_tdtgd,
 	.get = param_get_int,
@@ -574,6 +584,7 @@ static int unset_tdtgd(const char *buf, const struct kernel_param *kp)
 	return retval;
 }
 
+
 static const struct kernel_param_ops unset_tdtgd_ops = {
 	.set = unset_tdtgd,
 	.get = param_get_int,
@@ -597,6 +608,7 @@ static int enable_binder_vip_inheritance(const char *buf, const struct kernel_pa
 	binder_vip_inheritance_enable = !!val;
 	return retval;
 }
+
 
 static const struct kernel_param_ops enable_binder_vip_inheritance_ops = {
 	.set = enable_binder_vip_inheritance,
@@ -622,6 +634,7 @@ static int enable_binder_nonvip_inheritance(const char *buf, const struct kernel
 	binder_nonvip_inheritance_enable = !!val;
 	return retval;
 }
+
 
 static const struct kernel_param_ops enable_binder_nonvip_inheritance_ops = {
 	.set = enable_binder_nonvip_inheritance,
@@ -694,6 +707,7 @@ static int enforce_ct_to_vip_param(const char *buf, const struct kernel_param *k
 	return enforce_ct_to_vip(val, caller_id);
 }
 
+
 static const struct kernel_param_ops enforce_ct_to_vip_param_ops = {
 	.set = enforce_ct_to_vip_param,
 	.get = param_get_int,
@@ -724,6 +738,7 @@ static void update_cpu_loading(void)
 	avg_cpu_loading /= max_cpus;
 	mutex_unlock(&cpu_loading_lock);
 }
+
 
 int (*tt_vip_algo_hook)(int ct_vip_qualified, int ssid_tgid, int sui_tgid, int f_tgid, bool touching) = NULL;
 EXPORT_SYMBOL(tt_vip_algo_hook);
@@ -776,6 +791,7 @@ static void tt_vip_event_handler(struct work_struct *work)
 	tt_vip();
 }
 
+
 int (*is_target_found_hook)(const char*, int) = NULL;
 EXPORT_SYMBOL(is_target_found_hook);
 
@@ -806,6 +822,7 @@ static void tt_vip_periodic_handler(struct work_struct *work)
 	update_cpu_loading();
 	tt_vip();
 }
+
 
 /*
  * tt_input_event - Handles touch input events for VIP management
@@ -870,6 +887,7 @@ hook_unready:
 	}
 }
 
+
 static int tt_input_connect(struct input_handler *handler,
 		struct input_dev *dev,
 		const struct input_device_id *id)
@@ -904,12 +922,14 @@ err2:
 	return error;
 }
 
+
 static void tt_input_disconnect(struct input_handle *handle)
 {
 	input_close_device(handle);
 	input_unregister_handle(handle);
 	kfree(handle);
 }
+
 
 static const struct input_device_id tt_input_ids[] = {
 	{.driver_info = 1},
@@ -942,6 +962,7 @@ static void probe_android_rvh_prepare_prio_fork(void *ignore, struct task_struct
 	}
 }
 
+
 static void probe_android_rvh_finish_prio_fork(void *ignore, struct task_struct *p)
 {
 	if (!dl_prio(p->prio) && !rt_prio(p->prio)) {
@@ -952,6 +973,7 @@ static void probe_android_rvh_finish_prio_fork(void *ignore, struct task_struct 
 		turbo_data->nice_backup = PRIO_TO_NICE(p->prio);
 	}
 }
+
 
 static void probe_android_rvh_rtmutex_prepare_setprio(void *ignore, struct task_struct *p,
 						struct task_struct *pi_task)
@@ -998,6 +1020,7 @@ static void probe_android_rvh_rtmutex_prepare_setprio(void *ignore, struct task_
 	}
 }
 
+
 static void probe_android_rvh_set_user_nice(void *ignore, struct task_struct *p,
 						long *nice, bool *allowed)
 {
@@ -1030,6 +1053,7 @@ static void probe_android_rvh_set_user_nice(void *ignore, struct task_struct *p,
 	trace_sched_set_user_nice(p, *nice, p_turbo);
 }
 
+
 static void probe_android_rvh_setscheduler(void *ignore, struct task_struct *p)
 {
 	struct task_turbo_t *turbo_data;
@@ -1040,15 +1064,18 @@ static void probe_android_rvh_setscheduler(void *ignore, struct task_struct *p)
 	}
 }
 
+
 static void probe_android_vh_rwsem_wait_finish(void *ignore, struct rw_semaphore *sem)
 {
 	rwsem_stop_turbo_inherit(sem);
 }
 
+
 static void probe_android_vh_rwsem_init(void *ignore, struct rw_semaphore *sem)
 {
 	sem->android_vendor_data1 = 0;
 }
+
 
 static void probe_android_vh_alter_rwsem_list_add(void *ignore, struct rwsem_waiter *waiter,
 							struct rw_semaphore *sem,
@@ -1058,15 +1085,18 @@ static void probe_android_vh_alter_rwsem_list_add(void *ignore, struct rwsem_wai
 	*already_on_list = true;
 }
 
+
 static void probe_android_vh_rwsem_wait_start(void *ignore, struct rw_semaphore *sem)
 {
 	rwsem_start_turbo_inherit(sem);
 }
 
+
 static void probe_android_vh_binder_transaction_init(void *ignore, struct binder_transaction *t)
 {
 	t->android_vendor_data1 = 0;
 }
+
 
 bool binder_start_vip_inherit(struct task_struct *from,
 					struct task_struct *to)
@@ -1123,6 +1153,7 @@ done:
 	return false;
 }
 
+
 void binder_stop_vip_inherit(struct task_struct *p)
 {
 	struct task_turbo_t *turbo_data;
@@ -1140,6 +1171,7 @@ void binder_stop_vip_inherit(struct task_struct *p)
 	turbo_data->vip_prio_backup = 0;
 }
 
+
 static void probe_android_vh_binder_set_priority(void *ignore, struct binder_transaction *t,
 							struct task_struct *task)
 {
@@ -1150,6 +1182,7 @@ static void probe_android_vh_binder_set_priority(void *ignore, struct binder_tra
 	if (binder_vip_inheritance_enable && tt_vip_enable && binder_start_vip_inherit_hook)
 		binder_start_vip_inherit(t->from ? t->from->task : NULL, task);
 }
+
 
 static void probe_android_vh_binder_restore_priority(void *ignore,
 		struct binder_transaction *in_reply_to, struct task_struct *cur)
@@ -1167,6 +1200,7 @@ static void probe_android_vh_binder_restore_priority(void *ignore,
 	if (cur && binder_stop_vip_inherit_hook)
 		binder_stop_vip_inherit(cur);
 }
+
 
 static void probe_android_vh_alter_futex_plist_add(void *ignore, struct plist_node *q_list,
 						struct plist_head *hb_chain, bool *already_on_hb)
@@ -1202,6 +1236,7 @@ static void probe_android_vh_alter_futex_plist_add(void *ignore, struct plist_no
 	*already_on_hb = false;
 }
 
+
 static void probe_android_rvh_select_task_rq_fair(void *ignore, struct task_struct *p,
 							int prev_cpu, int sd_flag,
 							int wake_flags, int *target_cpu)
@@ -1213,16 +1248,19 @@ static void probe_android_rvh_select_task_rq_fair(void *ignore, struct task_stru
 	*target_cpu = select_turbo_cpu(p);
 }
 
+
 static inline struct task_struct *rwsem_owner(struct rw_semaphore *sem)
 {
 	return (struct task_struct *)
 		(atomic_long_read(&sem->owner) & ~RWSEM_OWNER_FLAGS_MASK);
 }
 
+
 static inline bool rwsem_test_oflags(struct rw_semaphore *sem, long flags)
 {
 	return atomic_long_read(&sem->owner) & flags;
 }
+
 
 static inline bool is_rwsem_reader_owned(struct rw_semaphore *sem)
 {
@@ -1238,10 +1276,12 @@ static inline bool is_rwsem_reader_owned(struct rw_semaphore *sem)
 	return rwsem_test_oflags(sem, RWSEM_READER_OWNED);
 }
 
+
 static unsigned long capacity_of(int cpu)
 {
 	return cpu_rq(cpu)->cpu_capacity;
 }
+
 
 /*
  * cpu_util_without: compute cpu utilization without any contributions from *p
@@ -1264,6 +1304,7 @@ static unsigned long cpu_util_without(int cpu, struct task_struct *p)
 
 	return cpu_util(cpu, p, -1, 0);
 }
+
 
 /**
  * cpu_util() - Estimates the amount of CPU capacity used by CFS tasks.
@@ -1369,15 +1410,18 @@ cpu_util(int cpu, struct task_struct *p, int dst_cpu, int boost)
 	return min(util, capacity_orig_of(cpu));
 }
 
+
 static inline unsigned long task_util(struct task_struct *p)
 {
 	return READ_ONCE(p->se.avg.util_avg);
 }
 
+
 static inline unsigned long _task_util_est(struct task_struct *p)
 {
 	return READ_ONCE(p->se.avg.util_est) & ~UTIL_AVG_UNCHANGED;
 }
+
 
 int find_best_turbo_cpu(struct task_struct *p)
 {
@@ -1425,6 +1469,7 @@ out:
 	return new_cpu;
 }
 
+
 int select_turbo_cpu(struct task_struct *p)
 {
 	int target_cpu = -1;
@@ -1439,6 +1484,7 @@ int select_turbo_cpu(struct task_struct *p)
 
 	return target_cpu;
 }
+
 
 /* copy from sched/core.c */
 static void set_load_weight(struct task_struct *p, bool update_load)
@@ -1466,6 +1512,7 @@ static void set_load_weight(struct task_struct *p, bool update_load)
 		load->inv_weight = sched_prio_to_wmult[prio];
 	}
 }
+
 
 #if IS_ENABLED(CONFIG_ARM64)
 /**
@@ -1523,6 +1570,7 @@ out_unlock:
 	spin_unlock_irqrestore(&RWSEM_SPIN_LOCK, flags);
 }
 
+
 static void rwsem_list_add(struct task_struct *task,
 			   struct list_head *entry,
 			   struct list_head *head)
@@ -1557,6 +1605,7 @@ static void rwsem_list_add(struct task_struct *task,
 	}
 	list_add_tail(entry, head);
 }
+
 
 static void rwsem_start_turbo_inherit(struct rw_semaphore *sem)
 {
@@ -1599,6 +1648,7 @@ out_unlock:
 	spin_unlock_irqrestore(&RWSEM_SPIN_LOCK, flags);
 }
 
+
 static bool start_turbo_inherit(struct task_struct *task,
 				int type,
 				int cnt)
@@ -1617,6 +1667,7 @@ static bool start_turbo_inherit(struct task_struct *task,
 	set_scheduler_tuning(task);
 	return true;
 }
+
 
 static bool stop_turbo_inherit(struct task_struct *task,
 				int type)
@@ -1647,6 +1698,7 @@ done:
 	return ret;
 }
 
+
 static inline void set_scheduler_tuning(struct task_struct *task)
 {
 	int cur_nice = task_nice(task);
@@ -1667,6 +1719,7 @@ static inline void set_scheduler_tuning(struct task_struct *task)
 	trace_sched_turbo_nice_set(task, NICE_TO_PRIO(cur_nice), task->prio);
 }
 
+
 static inline void unset_scheduler_tuning(struct task_struct *task)
 {
 	int cur_prio = task->prio;
@@ -1681,6 +1734,7 @@ static inline void unset_scheduler_tuning(struct task_struct *task)
 	trace_sched_turbo_nice_set(task, cur_prio, task->prio);
 }
 
+
 static inline void add_inherit_types(struct task_struct *task, int type)
 {
 	struct task_turbo_t *turbo_data;
@@ -1689,6 +1743,7 @@ static inline void add_inherit_types(struct task_struct *task, int type)
 	atomic_add(type_number(type), &turbo_data->inherit_types);
 }
 
+
 static inline void sub_inherit_types(struct task_struct *task, int type)
 {
 	struct task_turbo_t *turbo_data;
@@ -1696,6 +1751,7 @@ static inline void sub_inherit_types(struct task_struct *task, int type)
 	turbo_data = get_task_turbo_t(task);
 	atomic_sub(type_number(type), &turbo_data->inherit_types);
 }
+
 
 static bool binder_start_turbo_inherit(struct task_struct *from,
 					struct task_struct *to)
@@ -2389,6 +2445,17 @@ static int __init init_task_turbo(void)
 		ret_erri_line = __LINE__;
 		goto failed;
 	}
+
+
+
+
+
+
+
+
+
+
+
 
 	ret = register_trace_android_vh_binder_set_priority(
 			probe_android_vh_binder_set_priority, NULL);
