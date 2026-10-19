@@ -30,6 +30,8 @@
 #include <net/sock.h>		/* netlink */
 #include <linux/suspend.h>
 #include "mtk_battery.h"
+#include "mtk_charger.h"
+#include "mtk_charger_algorithm_class.h"
 
 
 /* ============================================================ */
@@ -381,11 +383,11 @@ int get_shutdown_cond(struct mtk_battery *gm)
 	sdu = &gm->bm->sdc.bat[gm->id];
 
 	if (sdu->shutdown_status.is_soc_zero_percent)
-		pr_err("[%s]soc_zero_percent not shutdown\n", __func__);
+		ret |= 1;
 	if (sdu->shutdown_status.is_uisoc_one_percent)
-		pr_err("[%s]uisoc_one_percent not shutdown\n", __func__);
+		ret |= 1;
 	if (sdu->lowbatteryshutdown)
-		pr_err("[%s]lowbatteryshutdown not shutdown\n", __func__);
+		ret |= 1;
 
 	if (gm->bm->gm_no == 2) {
 		if (gm->bm->sdc.bmsdu.lowbatteryshutdown)
@@ -446,10 +448,6 @@ int set_bm_shutdown_cond(struct mtk_battery_manager *bm, int shutdown_cond)
 			if (now_is_kpoc != 1) {
 				if (now_is_charging != 1) {
 					bmsdu->shutdown_status.is_soc_zero_percent = true;
-					battery_set_property(bm->gm1,
-							BAT_PROP_WAKEUP_FG_ALGO, FG_INTR_SHUTDOWN);
-					battery_set_property(bm->gm2,
-							BAT_PROP_WAKEUP_FG_ALGO, FG_INTR_SHUTDOWN);
 					pr_err("[%s]soc_zero_percent shutdown\n",
 						__func__);
 				}
@@ -464,10 +462,6 @@ int set_bm_shutdown_cond(struct mtk_battery_manager *bm, int shutdown_cond)
 			if (now_is_kpoc != 1) {
 				if (now_is_charging != 1) {
 					bmsdu->shutdown_status.is_uisoc_one_percent = true;
-					battery_set_property(bm->gm1,
-							BAT_PROP_WAKEUP_FG_ALGO, FG_INTR_SHUTDOWN);
-					battery_set_property(bm->gm2,
-							BAT_PROP_WAKEUP_FG_ALGO, FG_INTR_SHUTDOWN);
 					pr_err("[%s]uisoc 1 percent shutdown\n",
 						__func__);
 				}
@@ -703,6 +697,28 @@ int set_shutdown_cond(struct mtk_battery *gm, int shutdown_cond)
 /* ============================================================ */
 /* power misc end*/
 /* ============================================================ */
+/*
+ * gold: after a full charge, capacity stays at 100% until the gauge drops
+ * below RECHARGE_UISOC, then steps down to it at a pace set by the
+ * discharge current (in 0.1 mA steps of curr_lim, one percent every time
+ * seconds).
+ */
+struct ffc_smooth {
+	int curr_lim;
+	int time;
+};
+
+#define FFC_SMOOTH_LEN			4
+struct ffc_smooth ffc_dischg_smooth[FFC_SMOOTH_LEN] = {
+	{0,    300},
+	{300,  150},
+	{600,   72},
+	{1000,  50},
+};
+
+/*N17 95% recharge by llt at 230616, changed to 97% at 230717 */
+#define RECHARGE_UISOC 97
+
 void battery_update(struct mtk_battery_manager *bm)
 {
 	ktime_t now, duraction;
@@ -716,15 +732,87 @@ void battery_update(struct mtk_battery_manager *bm)
 	static int first;
 	struct battery_shutdown_unit *sdu;
 	int vbat1 = 0, vbat2 = 0, real_uisoc = 0, real_quse = 0;
+/*N17 code for HQ-299665 by miaozhichao at 2023/6/14 start*/
+	struct power_supply *psy;
+	struct mtk_charger *info;
+	int ret;
+	int curr_now = 0;
+	int vbat_now = 0;
+	union power_supply_propval val;
+	bool chg_done = false;
+	time64_t time_now, delta_time;
+	static time64_t time_last;
+	int unit_time = 0, i = 0, curr_avg = 0, soc_changed = 0;
 
+	psy = power_supply_get_by_name("mtk-master-charger");
+	if (psy == NULL) {
+		pr_err("[%s]psy is not rdy\n", __func__);
+		return;
+	}
+	info = (struct mtk_charger *)power_supply_get_drvdata(psy);
+	if (info == NULL) {
+		pr_err("[%s] charge is not rdy\n", __func__);
+		return;
+	}
+/*N17 code for HQ-299665 by miaozhichao at 2023/6/14 end*/
 	if (bm == NULL) {
 		pr_err("[%s]battery manager is not rdy\n",
 				__func__);
 		return;
 	}
+	/*N17 code for HQ-308499 by liyanhao at 2023/08/10 start*/
+	ret = gauge_get_property(bm->gm1, GAUGE_PROP_BATTERY_CURRENT, &curr_now);
+	if (ret < 0) {
+		pr_err("[%s] get ibat failed\n", __func__);
+		return;
+	}
+	ret = gauge_get_property(bm->gm1, GAUGE_PROP_BATTERY_VOLTAGE, &vbat_now);
+	if (ret < 0) {
+		pr_err("[%s] get vbat failed\n", __func__);
+		return;
+	}
+	/*N17 code for HQ-308499 by liyanhao at 2023/08/10 end*/
 	sdu = &bm->sdc.bmsdu;
 	bat_data = &bm->bs_data;
 	bat_psy = bat_data->psy;
+
+	/*
+	 * Full on a verified Xiaomi PD adapter, once the charge pump is done:
+	 * HQHW-4275, HQ-319801, HQHW-4469, HQ-319214
+	 */
+	if (bat_data->bat_batt_temp > 35 && bat_data->bat_batt_temp <= 48 &&
+	    info->ta_capability == APDO_TA &&
+	    info->adapter_dev[PD]->verifed == true &&
+	    chg_alg_cp_charge_finished(info->alg[2])) {
+		if (curr_now * 100 <= 1100000 && vbat_now >= 4510) {
+			bat_data->bat_status = POWER_SUPPLY_STATUS_FULL;
+			bat_data->bat_full = true;
+			info->is_full_flag = true;
+			/*N17 code for HQHW-4469 by miaozhichao at 2023/7/04 */
+			val.intval = bat_data->bat_full;
+			power_supply_set_property(psy,
+				POWER_SUPPLY_PROP_ENERGY_FULL, &val);
+		}
+	}
+
+	/* If VBAT drops below 4.41 V, it is no longer full */
+	if (vbat_now <= 4410 && bat_data->bat_full == true) {
+		bat_data->bat_full = false;
+		val.intval = bat_data->bat_full;
+		power_supply_set_property(psy,
+			POWER_SUPPLY_PROP_ENERGY_FULL, &val);
+	}
+
+	pr_err("[%s]temp:%d pd_type:%d pd_verifed:%d bat_status:%d ibat:%d vbat:%d bat_full:%d\n",
+		__func__, bat_data->bat_batt_temp, info->ta_capability,
+		info->adapter_dev[PD]->verifed, bat_data->bat_status,
+		curr_now * 100, vbat_now, bat_data->bat_full);
+
+	/*N17 code for HQHW-4192 by miaozhichao at 2023/6/28 */
+	charger_dev_is_charging_done(info->chg1_dev, &chg_done);
+	if (chg_done && bat_data->bat_capacity == 100)
+		bat_data->bat_status = POWER_SUPPLY_STATUS_FULL;
+	pr_err("[%s]bat_status:%d\n", __func__, bat_data->bat_status);
 
 	if (bm->gm_no == 2) {
 		gm1 = bm->gm1;
@@ -845,6 +933,81 @@ void battery_update(struct mtk_battery_manager *bm)
 	bat_data->bat_health = POWER_SUPPLY_HEALTH_GOOD;
 	bat_data->bat_present = 1;
 
+/*N17 95% recharge by llt at 230616, changed to 97% at 230717 */
+	if (info->is_full_flag) {
+		/* after a full charge, until the 97% recharge */
+		if (bm->uisoc > RECHARGE_UISOC)
+			time_last = ktime_get_seconds();
+		else
+			info->is_full_flag = false;
+		bat_data->bat_capacity = 100;
+		bat_data->last_capacity = 100;
+		pr_err("[%s]keep 100, bat_capacity = %d, uisoc = %d, is_full_flag = %d\n",
+			__func__, bat_data->bat_capacity, bm->uisoc, info->is_full_flag);
+	} else {
+		pr_err("[%s]start of smooth, bat_capacity = %d, uisoc = %d, last_capacity = %d, is_full_flag = %d\n",
+			__func__, bat_data->bat_capacity, bm->uisoc, bat_data->last_capacity, info->is_full_flag);
+
+		if (bat_data->last_capacity > bm->uisoc + 1) {
+			bm->gm1->s_flag = LOW_FAST_IN;
+			time_now = ktime_get_seconds();
+			delta_time = time_now - time_last;
+
+			gauge_get_property(bm->gm1, GAUGE_PROP_AVERAGE_CURRENT, &curr_avg);
+			for (i = FFC_SMOOTH_LEN - 1; i >= 0; i--) {
+				if (-curr_avg / 10 > ffc_dischg_smooth[i].curr_lim) {
+					unit_time = ffc_dischg_smooth[i].time;
+					break;
+				}
+			}
+
+			delta_time = delta_time / unit_time;
+			if (delta_time < 1)
+				soc_changed = 0;
+			else {
+				soc_changed = 1;
+				time_last = ktime_get_seconds();
+			}
+			pr_err("[%s]curr_avg = %d, unit_time = %d, delta_time = %lld, soc_changed = %d\n",
+				__func__, curr_avg, unit_time, delta_time, soc_changed);
+
+			bat_data->bat_capacity = bat_data->last_capacity - soc_changed;
+			bat_data->last_capacity = bat_data->bat_capacity;
+			pr_err("[%s]end of smooth, bat_capacity = %d, uisoc = %d, last_capacity = %d\n",
+				__func__, bat_data->bat_capacity, bm->uisoc, bat_data->last_capacity);
+		} else if (bm->gm1->s_flag == LOW_FAST_IN && bat_data->last_capacity == bm->uisoc + 1) {
+			bm->gm1->s_flag = LOW_FAST_SWITCH;
+			bat_data->bat_capacity = bm->uisoc + 1;
+			bat_data->last_capacity = bat_data->bat_capacity;
+			time_last = ktime_get_seconds();
+			pr_err("[%s]low_fast_switch smooth first cycle, bat_capacity = %d, uisoc = %d, last_capacity = %d\n",
+				__func__, bat_data->bat_capacity, bm->uisoc, bat_data->last_capacity);
+		} else if (bm->gm1->s_flag == LOW_FAST_SWITCH) {
+			time_now = ktime_get_seconds();
+			delta_time = time_now - time_last;
+			if (delta_time < 5)
+				soc_changed = 0;
+			else if (delta_time >= 5 && bat_data->last_capacity > bm->uisoc) {
+				soc_changed = 1;
+				time_last = ktime_get_seconds();
+			} else {
+				bm->gm1->s_flag = LOW_FAST_NORMAL;
+				soc_changed = 0;
+			}
+			bat_data->bat_capacity = bat_data->last_capacity - soc_changed;
+			bat_data->last_capacity = bat_data->bat_capacity;
+			pr_err("[%s]low_fast_switch smooth second cycle, bat_capacity = %d, uisoc = %d, last_capacity = %d, delta_time = %lld, soc_changed = %d\n",
+				__func__, bat_data->bat_capacity, bm->uisoc, bat_data->last_capacity, delta_time, soc_changed);
+		} else {
+			bm->gm1->s_flag = LOW_FAST_NORMAL;
+			bat_data->bat_capacity = bm->uisoc;
+			bat_data->last_capacity = bat_data->bat_capacity;
+			pr_err("[%s]normal not smooth, bat_capacity = %d, uisoc = %d, last_capacity = %d\n",
+				__func__, bat_data->bat_capacity, bm->uisoc, bat_data->last_capacity);
+		}
+	}
+	/*N17 code for HQHW-5058 by yeyinzi at 2023/8/28 */
+	bat_data->final_capacity = bat_data->bat_capacity;
 	power_supply_changed(bat_psy);
 }
 

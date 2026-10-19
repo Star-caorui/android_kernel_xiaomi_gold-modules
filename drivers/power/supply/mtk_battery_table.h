@@ -47,11 +47,11 @@
 /* Qmax for battery  */
 int g_Q_MAX[MAX_TABLE][TOTAL_BATTERY_NUMBER] = {
 	/*bat1,   bat2,   bat3,    bat4*/
-	{ 6707, 6506, 2490, 1965},/*T0*/
-	{ 6801, 6528, 2468, 1984},/*T1*/
-	{ 6743, 6508, 2310, 1946},/*T2*/
-	{ 6572, 6467, 1858, 1873},/*T3*/
-	{ 6414, 6469, 1843, 1851},/*T4*/
+	{ 2946, 2712, 2490, 1965},/*T0*/
+	{ 2796, 2851, 2468, 1984},/*T1*/
+	{ 2718, 2432, 2310, 1946},/*T2*/
+	{ 2535, 1991, 1858, 1873},/*T3*/
+	{ 2523, 1960, 1843, 1851},/*T4*/
 	{ 2211, 1652, 1533, 1541},/*T5*/
 	{ 2201, 1642, 1523, 1531},/*T6*/
 	{ 2191, 1632, 1513, 1521},/*T7*/
@@ -109,11 +109,11 @@ int g_FG_PSEUDO1[MAX_TABLE][TOTAL_BATTERY_NUMBER] = {
 
 int g_FG_PSEUDO100[MAX_TABLE][TOTAL_BATTERY_NUMBER] = {
 	/*bat1,   bat2,   bat3,    bat4*/
-	{ 97, 97, 100, 100},/*T0*/
-	{ 97, 97, 100, 100},/*T1*/
-	{ 97, 97, 100, 100},/*T2*/
-	{ 96, 96, 100, 100},/*T3*/
-	{ 96, 96, 100, 100},/*T4*/
+	{ 100, 100, 100, 100},/*T0*/
+	{ 100, 100, 100, 100},/*T1*/
+	{ 100, 100, 100, 100},/*T2*/
+	{ 100, 100, 100, 100},/*T3*/
+	{ 100, 100, 100, 100},/*T4*/
 	{ 100, 100, 100, 100},/*T5*/
 	{ 100, 100, 100, 100},/*T6*/
 	{ 100, 100, 100, 100},/*T7*/
@@ -142,8 +142,10 @@ int g_FG_PSEUDO1_OFFSET[TOTAL_BATTERY_NUMBER] = {0, 0, 0, 0};
 /* pmic_min_vol by temp ,control by MULTI_TEMP_GAUGE0=1, 34000=3.4v */
 int g_PMIC_MIN_VOL[MAX_TABLE][TOTAL_BATTERY_NUMBER] = {
 	/*bat1,   bat2,   bat3,    bat4*/
-	{33500, 33500, 33500, 33500},/*T0*/
-	{33500, 33500, 33500, 33500},/*T1*/
+/* N17 code for HQHW-4392 by tongjiacheng at 20230710 start */
+	{33450, 33450, 33450, 33450},/*T0*/
+	{33450, 33450, 33450, 33450},/*T1*/
+/* N17 code for HQHW-4392 by tongjiacheng at 20230710 end */
 	{33500, 33500, 33500, 33500},/*T2*/
 	{32200, 32200, 32200, 32200},/*T3*/
 	{31000, 31000, 31000, 31000},/*T4*/
@@ -172,11 +174,17 @@ int g_PON_SYS_IBOOT[MAX_TABLE][TOTAL_BATTERY_NUMBER] = {
 /* Q_MAX_SYS_VOLTAGE by temp ,control by MULTI_TEMP_GAUGE0=1, */
 int g_QMAX_SYS_VOL[MAX_TABLE][TOTAL_BATTERY_NUMBER] = {
 	/*bat1,   bat2,   bat3,    bat4*/
-	{33500, 33500, 33500, 33500},/*T0*/
-	{33500, 33700, 33500, 33500},/*T1*/
-	{33500, 33500, 33500, 33500},/*T2*/
-	{33000, 33200, 32900, 32900},/*T3*/
-	{33000, 33200, 32800, 32800},/*T4*/
+/* N17 code for HQHW-4392 by tongjiacheng at 20230710 start */
+	{33450, 33450, 33450, 33450},/*T0*/
+	{33450, 33450, 33450, 33450},/*T1*/
+/* N17 code for HQHW-4392 by tongjiacheng at 20230710 end */
+/* N17 code for HQHW-4276 by tongjiacheng at 20230704 start */
+	{33100, 33100, 33100, 33100},/*T2*/
+/* N17 code for HQHW-4549 by wangtingting at 2023/07/09 start */
+	{30300, 30300, 30300, 30300},/*T3*/
+	{31250, 31250, 31250, 31250},/*T4*/
+/* N17 code for HQHW-4549 by wangtingting at 2023/07/09 end */
+/* N17 code for HQHW-4276 by tongjiacheng at 20230704 end */
 	{33500, 33500, 33500, 33500},/*T5*/
 	{33500, 33500, 33500, 33500},/*T6*/
 	{33500, 33500, 33500, 33500},/*T7*/
@@ -202,9 +210,8 @@ int g_temperature[MAX_TABLE] = {
 };
 
 
-#define BAT_NTC_10 0
+#define BAT_NTC_10 1
 #define BAT_NTC_47 0
-#define BAT_NTC_100 1
 
 #if (BAT_NTC_10 == 1)
 #define RBAT_PULL_UP_R             24000
@@ -212,10 +219,6 @@ int g_temperature[MAX_TABLE] = {
 
 #if (BAT_NTC_47 == 1)
 #define RBAT_PULL_UP_R             61900
-#endif
-
-#if (BAT_NTC_100 == 1)
-#define RBAT_PULL_UP_R             100000
 #endif
 
 #define RBAT_PULL_UP_VOLT          1840
@@ -274,31 +277,6 @@ struct fg_temp fg_temp_table[21] = {
 };
 #endif
 
-#if (BAT_NTC_100 == 1)
-struct fg_temp fg_temp_table[21] = {
-		{-40, 4251000},
-		{-35, 3005000},
-		{-30, 2149000},
-		{-25, 1554000},
-		{-20, 1135000},
-		{-15, 837800},
-		{-10, 624100},
-		{-5, 469100},
-		{0, 355600},
-		{5, 271800},
-		{10, 209400},
-		{15, 162500},
-		{20, 127000},
-		{25, 100000},
-		{30, 79230},
-		{35, 63180},
-		{40, 50680},
-		{45, 40900},
-		{50, 33190},
-		{55, 27090},
-		{60, 22220}
-};
-#endif
 
 
 /* ============================================================

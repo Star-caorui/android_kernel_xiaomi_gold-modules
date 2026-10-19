@@ -356,3 +356,4 @@ config LN8000_CHARGER
 	  MTK charger class device.
 
 source "$(KCONFIG_EXT_PREFIX)drivers/power/supply/ufcs/Kconfig"
+source "$(KCONFIG_EXT_PREFIX)../vendor/huaqin/kernel_modules/gold/battery_secrete/Kconfig"

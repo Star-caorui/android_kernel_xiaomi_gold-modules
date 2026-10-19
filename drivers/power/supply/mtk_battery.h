@@ -13,6 +13,7 @@
 #include <linux/hrtimer.h>
 #include <linux/nvmem-consumer.h>
 #include <linux/power_supply.h>
+#include <tcpm.h>
 #include <linux/sysfs.h>
 #include <linux/wait.h>
 #include <linux/ktime.h>
@@ -123,6 +124,20 @@ enum manager_cmd {
 	MANAGER_DYNAMIC_CV,
 };
 
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 start*/
+/* smart chg for smart charge engine */
+enum smart_chg_functype{
+	SMART_CHG_STATUS_FLAG = 0,
+	SMART_CHG_FEATURE_MIN_NUM = 1,
+	SMART_CHG_NAVIGATION = 1,
+	SMART_CHG_OUTDOOR_CHARGE,
+        SMART_CHG_LOW_FAST = 3,
+	/* add new func here */
+	SMART_CHG_FEATURE_MAX_NUM = 15,
+};
+/* end of smart chg */
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 end*/
+
 enum battery_property {
 	BAT_PROP_TEMPERATURE,
 	BAT_PROP_COULOMB_INT_GAP,
@@ -136,9 +151,13 @@ enum battery_property {
 	BAT_PROP_FG_RESET,
 	BAT_PROP_LOG_LEVEL,
 	BAT_PROP_WAKEUP_FG_ALGO,
-	BAT_PROP_STOPCHARGING_TEST,
-	BAT_PROP_STARTCHARGING_TEST,
-	BAT_PROP_FAKE_CYCLE_COUNT,
+	BAT_PROP_SMART_BATT,
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 start*/
+	BAT_PROP_SMART_CHG,
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 end*/
+	BAT_PROP_SCREEN_ON,
+	BAT_PROP_AUDIO_ON,
+	BAT_PROP_CID_ENABLE,
 };
 
 enum property_control_data {
@@ -182,9 +201,20 @@ struct battery_data {
 	int bat_present;
 	int bat_technology;
 	int bat_capacity;
+/*N17 code for HQHW-5058 by yeyinzi at 2023/8/28 start*/
+	int final_capacity;
+/*N17 code for HQHW-5058 by yeyinzi at 2023/8/28 end*/
+/*N17 code for HQ-299665 by miaozhichao at 2023/6/14 start*/
+	int bat_full;
+/*N17 code for HQ-299665 by miaozhichao at 2023/6/14 end*/
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 start*/
+	int soc;
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 end*/
 	/* Add for Battery Service */
 	int bat_batt_vol;
 	int bat_batt_temp;
+	/* gold: the capacity smoothing's last capacity */
+	int last_capacity;
 };
 
 struct VersionControl {
@@ -940,7 +970,7 @@ struct irq_controller {
 #define SHUTDOWN_TIME 40
 #define AVGVBAT_ARRAY_SIZE 30
 #define INIT_VOLTAGE 3450
-#define BATTERY_SHUTDOWN_TEMPERATURE 58
+#define BATTERY_SHUTDOWN_TEMPERATURE 60
 #define DISABLE_POWER_PATH_VOLTAGE 2800
 
 struct shutdown_condition {
@@ -1087,6 +1117,20 @@ struct ag_center_data_st {
 struct shutdown_data {
 	int data[7];
 };
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 start*/
+struct smart_chg {
+	bool en_ret;
+	int active_status;
+	int func_val;
+};
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 end*/
+
+enum smooth_flag{
+	LOW_FAST_NORMAL = 0,
+	LOW_FAST_IN = 1,
+	LOW_FAST_SWITCH = 2,
+};
+
 struct mtk_battery {
 	/*linux driver related*/
 	wait_queue_head_t  wait_que;
@@ -1107,6 +1151,8 @@ struct mtk_battery {
 	struct mtk_battery_algo algo;
 
 	struct mtk_battery_sysfs_field_info *battery_sysfs;
+	/* gold: puts the attributes above on the battery power supply */
+	int (*create_sysfs)(struct mtk_battery *gm);
 
 	int fg_vbat_l_thr;
 	int fg_vbat_h_thr;
@@ -1116,9 +1162,7 @@ struct mtk_battery {
 
 	/*for bat prop*/
 	int no_prop_timeout_control;
-	bool shippingmode;
-	bool control_cc_toggle;
-	bool input_suspend;
+
 	/* adb */
 	int fixed_bat_tmp;
 	int fixed_uisoc;
@@ -1274,8 +1318,6 @@ struct mtk_battery {
 	struct fuel_gauge_custom_data fg_cust_data;
 	struct fuel_gauge_table_custom_data fg_table_cust_data;
 	struct fgd_cmd_param_t_custom fg_data;
-	int battery_id_res;
-	struct charger_dev *use_charge;
 
 	/*daemon version control*/
 	struct VersionControl fg_version;
@@ -1329,6 +1371,27 @@ struct mtk_battery {
 	unsigned int notify_code;
 
 	struct shutdown_data sd_data;
+	/* gold */
+	int diff_fv_val;
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 start*/
+	struct smart_chg smart_charge[SMART_CHG_FEATURE_MAX_NUM + 1];
+/*N17 code for HQ-305986 by xm tianye9 at 2023/07/05 end*/
+	int fake_bat_cycle;
+	int fake_cycle_count;
+	enum smooth_flag s_flag;
+
+	/*
+	 * gold: Type-C connection detection. While the screen is off and no
+	 * audio plays, the port stops toggling as a dual-role port when
+	 * nothing is attached, which saves power.
+	 */
+	struct {
+		int enable;
+		int screen_on;
+		int audio_on;
+		struct tcpc_device *tcpc;
+		struct notifier_block disp_nb;
+	} cid;
 };
 
 struct mtk_battery_manager {
@@ -1379,6 +1442,8 @@ struct mtk_battery_manager {
 	int disable_quick_shutdown;
 	int vsys_det_voltage1;
 	int vsys_det_voltage2;
+	/* gold: the constant charge current asked for on the battery */
+	int const_current;
 };
 
 struct mtk_battery_sysfs_field_info {
@@ -1639,7 +1704,7 @@ extern void mtk_irq_thread_init(struct mtk_battery *gm);
 #define EXT_HWOCV_SWOCV_LT_TEMP		5
 
 /* fgc & fgv threshold */
-#define DIFFERENCE_FGC_FGV_TH1		300
+#define DIFFERENCE_FGC_FGV_TH1		100
 #define DIFFERENCE_FGC_FGV_TH2		500
 #define DIFFERENCE_FGC_FGV_TH3		300
 #define DIFFERENCE_FGC_FGV_TH_SOC1	7000
@@ -1779,9 +1844,5 @@ extern void mtk_irq_thread_init(struct mtk_battery *gm);
 #define BATTERY_ID_CHANNEL_NUM	1
 #define BATTERY_PROFILE_ID		0
 #define TOTAL_BATTERY_NUMBER	4
-
-extern int charger_manager_get_prop_system_temp_level(void);
-extern int charger_manager_get_prop_system_temp_level_max(void);
-extern void charger_manager_set_prop_system_temp_level(int temp_level);
 
 #endif /* __MTK_BATTERY_INTF_H__ */
