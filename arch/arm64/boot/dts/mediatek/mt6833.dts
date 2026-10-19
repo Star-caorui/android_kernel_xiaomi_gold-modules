@@ -2933,6 +2933,11 @@
 	subpmic_pmu_eint:subpmic_pmu_eint {
 	};
 
+	xm_chg_dfs: xm_chg_dfs {
+		compatible = "xiaomi,xm-chg-dfs";
+		status = "okay";
+	};
+
 	btif@1100c000 {
 		compatible = "mediatek,btif";
 			/*btif base*/
@@ -4041,6 +4046,10 @@
 			"mbox4";
 	};
 
+/*N17 HQ-291635 adb bringup by miaozhichao at 2023/4/18 start*/
+	tcpc_pd: tcpc_pd {
+	};
+/*N17 HQ-291635 adb bringup by miaozhichao at 2023/4/18 end*/
 	imp_iic_wrap_c_clk: syscon@11007000 {
 		compatible = "mediatek,mt6833-imp_iic_wrap_c", "syscon";
 		reg = <0 0x11007000 0 0x1000>;
@@ -5784,13 +5793,14 @@ gpufreq: gpufreq {
 		iommus = <&iommu0 M4U_PORT_L1_DISP_WDMA0>;
 	};
 
-	extcon_usb: extcon_usb {
+	extcon_usb: extcon-usb {
 		compatible = "mediatek,extcon-usb";
 		vbus-supply = <&otg_vbus>;
 		vbus-voltage = <5000000>;
 		vbus-current = <1800000>;
 		charger = <&mt6360_chg>;
 		tcpc = "type_c_port0";
+		vbus-limit-current = <0>;
 		mediatek,bypss-typec-sink = <1>;
 		port {
 			usb_role: endpoint@0 {
@@ -5882,14 +5892,20 @@ gpufreq: gpufreq {
 		/* enable_pe_plus; */
 		enable_pd20_reset;
 		power_path_support;
-		max_charger_voltage = <6500000>;
+/*N17 code for HQ-291625 by miaozhichao at 2023/04/26 start*/
+		max_charger_voltage = <14500000>;
+/*N17 code for HQ-291625 by miaozhichao at 2023/04/26 end*/
 		fast_charge_voltage = <3000000>;
 
 		/* charging current */
 		usb_charger_current = <500000>;
 		ac_charger_current = <2050000>;
-		ac_charger_input_current = <3200000>;
-		non_std_ac_charger_current = <500000>;
+/*N17 code for HQ-293343 by miaozhichao at 2023/5/1 start*/
+		ac_charger_input_current = <2050000>;
+/*N17 code for HQ-293343 by miaozhichao at 2023/5/1 end*/
+/*N17 code for HQ-290909 by miaozhichao at 2023/5/25 start*/
+		non_std_ac_charger_current = <1000000>;
+/*N17 code for HQ-290909 by miaozhichao at 2023/5/25 end*/
 		charging_host_charger_current = <1500000>;
 		ta_ac_charger_current = <3000000>;
 		pd_charger_current = <500000>;
@@ -5903,7 +5919,9 @@ gpufreq: gpufreq {
 	pe: pe {
 		compatible = "mediatek,charger,pe";
 		gauge = <&mtk_gauge>;
-
+/*N17 code for HQ-291625 by miaozhichao at 2023/05/04 start*/
+		status = "disabled";
+/*N17 code for HQ-291625 by miaozhichao at 2023/05/04 end*/
 		ta_12v_support;
 		ta_9v_support;
 
@@ -5922,7 +5940,9 @@ gpufreq: gpufreq {
 	pe2: pe2 {
 		compatible = "mediatek,charger,pe2";
 		gauge = <&mtk_gauge>;
-
+/*N17 code for HQ-291625 by miaozhichao at 2023/05/04 start*/
+		status = "disabled";
+/*N17 code for HQ-291625 by miaozhichao at 2023/05/04 end*/
 		/* PE 2.0 */
 		pe20_ichg_level_threshold = <1000000>; /* uA */
 		ta_start_battery_soc = <0>;
@@ -5950,18 +5970,20 @@ gpufreq: gpufreq {
 	pdc: pdc {
 		compatible = "mediatek,charger,pd";
 		gauge = <&mtk_gauge>;
-
 		min_charger_voltage = <4600000>;
 		pd_vbus_low_bound = <5000000>;
-		pd_vbus_upper_bound = <5000000>;
+		/* N17 code for HQHW-4815 by p-xuyechen at 2023/8/15 */
+		pd_vbus_upper_bound = <9000000>;
 		vsys_watt = <5000000>;
 		ibus_err = <14>;
 
 		pd_stop_battery_soc = <80>;
 
 		/* single charger */
-		sc_input_current = <3200000>;
-		sc_charger_current = <3000000>;
+		/* N17 code for HQHW-4815 by p-xuyechen at 2023/8/15 start */
+		sc_input_current = <2000000>;
+		sc_charger_current = <3600000>;
+		/* N17 code for HQHW-4815 by p-xuyechen at 2023/8/15 end */
 
 		/* dual charger in series*/
 		dcs_input_current = <3200000>;
@@ -5977,7 +5999,9 @@ gpufreq: gpufreq {
 	pe4: pe4 {
 		compatible = "mediatek,charger,pe4";
 		gauge = <&mtk_gauge>;
-
+/*N17 code for HQ-291625 by miaozhichao at 2023/05/04 start*/
+		status = "disabled";
+/*N17 code for HQ-291625 by miaozhichao at 2023/05/04 end*/
 		min_charger_voltage = <4600000>;
 		pe40_stop_battery_soc = <80>;
 
@@ -6012,6 +6036,71 @@ gpufreq: gpufreq {
 		charger = <&mt6360_chg>;
 		bootmode = <&chosen>;
 	};
+/*N17 code for HQ-291625 by miaozhichao at 2023/04/26 start*/
+	pe5: pe5 {
+		compatible = "mediatek,charger,pe5";
+		gauge = <&mtk_gauge>;
+		polling_interval = <10000>;
+		ta_cv_ss_repeat_tmin = <25>;
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 start*/
+		vbat_cv = <4510>;
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 end*/
+		start_soc_min = <0>;
+		start_soc_max = <80>;
+		stop_soc_max = <99>;
+		vbat_max_gap = <30>;
+		start_vbat_max = <4300>;
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 start*/
+		idvchg_term = <1000>;
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 end*/
+		idvchg_step = <50>;
+		ita_level = <3000 2500 2000 1500>;
+		rcable_level = <250 300 375 500>;
+		ita_level_dual = <5000 3700 3400 3000>;
+		rcable_level_dual = <230 350 450 550>;
+		idvchg_ss_init = <1000>;
+		idvchg_ss_step = <250>;
+		idvchg_ss_step1 = <100>;
+		idvchg_ss_step2 = <50>;
+		idvchg_ss_step1_vbat = <4000>;
+		idvchg_ss_step2_vbat = <4200>;
+		ta_blanking = <400>;
+		swchg_aicr = <0>;
+		swchg_ichg = <1200>;
+		swchg_aicr_ss_init = <400>;
+		swchg_aicr_ss_step = <200>;
+		swchg_off_vbat = <4250>;
+		force_ta_cv_vbat = <4250>;
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 start*/
+		chg_time_max = <10800>;
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 end*/
+		tta_level_def = <0 0 0 0 25 50 60 70 80>;
+		tta_curlmt = <0 0 0 0 0 300 600 900 (-1)>;
+		tta_recovery_area = <3>;
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 start*/
+		tbat_level_def = <5 5 10 15 25 35 48 58 58>;
+		tbat_curlmt = <(-1) (-1) 1800 1050 0 0 1800 (-1) (-1)>;
+		tbat_recovery_area = <3>;
+		tdvchg_level_def = <0 0 0 5 25 55 60 65 90>;
+		tdvchg_curlmt = <(-1) (-1) (-1) 50 0 50 50 100 (-1)>;
+		tdvchg_recovery_area = <3>;
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 end*/
+		tswchg_level_def = <0 0 0 5 25 65 70 75 80>;
+		tswchg_curlmt = <(-1) (-1) (-1) 200 0 200 300 400 (-1)>;
+		tswchg_recovery_area = <3>;
+		ifod_threshold = <600>;
+		rsw_min = <20>;
+		ircmp_rbat = <40>;
+		ircmp_vclamp = <0>;
+		vta_cap_min = <6800>;
+		vta_cap_max = <11000>;
+		ita_cap_min = <1000>;
+		support_ta = "pd_adapter";
+		vbat_threshold = <4150>;
+		allow_not_check_ta_status;
+	};
+/*N17 code for HQ-291625 by miaozhichao at 2023/04/26 end*/
+
 
 	charger: charger {
 		compatible = "mediatek,charger";
@@ -6022,32 +6111,43 @@ gpufreq: gpufreq {
 
 		algorithm_name = "Basic";
 		charger_configuration= <0>;
-
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 start*/
 		/* common */
-		battery_cv = <4350000>;
-		max_charger_voltage = <6500000>;
-		min_charger_voltage = <4600000>;
-
+		battery_cv = <4510000>;
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 end*/
+/*N17 code for HQ-291625 by miaozhichao at 2023/04/26 start*/
+		max_charger_voltage = <14500000>;
+/*N17 code for HQ-291625 by miaozhichao at 2023/04/26 end*/
+/*N17 code for HQ-293343 by miaozhichao at 2023/5/1 start*/
+		min_charger_voltage = <4400000>;
+/*N17 code for HQ-293343 by miaozhichao at 2023/5/1 end*/
 		/* sw jeita */
-		/* enable_sw_jeita; */
-		jeita_temp_above_t4_cv = <4240000>;
-		jeita_temp_t3_to_t4_cv = <4240000>;
-		jeita_temp_t2_to_t3_cv = <4340000>;
-		jeita_temp_t1_to_t2_cv = <4240000>;
-		jeita_temp_t0_to_t1_cv = <4040000>;
-		jeita_temp_below_t0_cv = <4040000>;
-		temp_t4_thres = <50>;
-		temp_t4_thres_minus_x_degree = <47>;
-		temp_t3_thres = <45>;
-		temp_t3_thres_minus_x_degree = <39>;
-		temp_t2_thres = <10>;
-		temp_t2_thres_plus_x_degree = <16>;
-		temp_t1_thres = <0>;
-		temp_t1_thres_plus_x_degree = <6>;
-		temp_t0_thres = <0>;
-		temp_t0_thres_plus_x_degree = <0>;
-		temp_neg_10_thres = <0>;
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 start*/
+		enable_sw_jeita;
+		/*N17 code for HQ-319214 by p-xiepengfu start at 2023/8/23*/
+		disable_aicl;
+		/*N17 code for HQ-319214 by p-xiepengfu end at 2023/8/23*/
+		jeita_temp_above_t6_cv = <4100000>;//>58
+		jeita_temp_t5_to_t6_cv = <4100000>;//48-58
+/*N17 code for HQHW-4607 by miaozhichao at 2023/7/14 start*/
+		jeita_temp_t4_to_t5_cv = <4460000>;//35-48
+		jeita_temp_t3_to_t4_cv = <4460000>;//15-35
+/*N17 code for HQHW-4607 by miaozhichao at 2023/7/14 end*/
+		jeita_temp_t2_to_t3_cv = <4480000>;//10-15
+		jeita_temp_t1_to_t2_cv = <4480000>;//5-10
+		jeita_temp_t0_to_t1_cv = <4480000>;//0-5
+/*N17 code for HQHW-4607 by tongjiacheng at 2023/07/31 start*/
+		jeita_temp_below_t0_cv = <4470000>;//<0
+/*N17 code for HQHW-4607 by tongjiacheng at 2023/07/31 end*/
 
+		jeita_temp_t5_to_t6_cc = <2450000>;
+		jeita_temp_t4_to_t5_cc = <3600000>;
+		jeita_temp_t3_to_t4_cc = <3600000>;
+		jeita_temp_t2_to_t3_cc = <3000000>;
+		jeita_temp_t1_to_t2_cc = <2450000>;
+		jeita_temp_t0_to_t1_cc = <980000>;
+		jeita_temp_below_t0_cc = <490000>;
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 end*/
 		/* battery temperature protection */
 		enable_min_charge_temp;
 		min_charge_temp = <0>;
@@ -6058,17 +6158,29 @@ gpufreq: gpufreq {
 		/* charging current */
 		usb_charger_current = <500000>;
 		ac_charger_current = <2050000>;
-		ac_charger_input_current = <3200000>;
+/*N17 code for HQ-293343 by miaozhichao at 2023/5/1 start*/
+		ac_charger_input_current = <2050000>;
+/*N17 code for HQ-293343 by miaozhichao at 2023/5/1 end*/
 		charging_host_charger_current = <1500000>;
 
 		/* dynamic mivr */
 		enable_dynamic_mivr;
-		min_charger_voltage_1 = <4400000>;
-		min_charger_voltage_2 = <4200000>;
+/*N17 code for HQ-293343 by miaozhichao at 2023/5/1 start*/
+		min_charger_voltage_1 = <4200000>;
+		min_charger_voltage_2 = <4000000>;
+/*N17 code for HQ-293343 by miaozhichao at 2023/5/1 end*/
 		max_dmivr_charger_current = <1800000>;
 
 		/* fast charging algo support indicator */
-		enable_fast_charging_indicator;
+/*N17 code for HQ-291625 by miaozhichao at 2023/04/26 start*/
+		/*enable_fast_charging_indicator;*/
+/*N17 code for HQ-291625 by miaozhichao at 2023/04/26 end*/
+
+/*N17 code for dropfv by liluting at 2023/5/30 start*/
+                cyclecount = <100 300 800 65535>;
+		dropfv_ffc = <0 20 20 40>;
+                dropfv_noffc = <0 10 20 40>;
+/*N17 code for dropfv by liluting at 2023/5/30 end*/
 	};
 
 	afe: mt6833-afe-pcm@11210000 {
@@ -6715,16 +6827,20 @@ gpufreq: gpufreq {
 			ichg = <2000000>;		/* uA */
 			aicr = <500000>;		/* uA */
 			mivr = <4400000>;		/* uV */
-			cv = <4350000>;			/* uA */
-			ieoc = <150000>;		/* uA */
-			safety-timer = <12>;		/* hour */
-			ircmp-resistor = <25000>;	/* uohm */
-			ircmp-vclamp = <32000>;		/* uV */
-			en-te = <1>;
-			en-wdt = <1>;
-			aicc-once = <1>;
-			post-aicc = <1>;
-			batoc-notify = <0>;
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 start*/
+			cv = <4510000>;			/* uA */
+/*N17 code for HQ-291115 by miaozhichao at 2023/5/30 end*/
+			ieoc = <200000>;		/* uA */
+/*N17 code for HQHW-4734 by yeyinzi at 2023/08/16 start*/
+			safety_timer = <20>;		/* hour */
+/*N17 code for HQHW-4734 by yeyinzi at 2023/08/16 end*/
+			ircmp_resistor = <25000>;	/* uohm */
+			ircmp_vclamp = <32000>;		/* uV */
+			en_te = <1>;
+			en_wdt = <1>;
+			aicc_once = <1>;
+			post_aicc = <1>;
+			batoc_notify = <0>;
 			phys = <&u2port0 PHY_TYPE_USB2>;
 			phy-names = "usb2-phy";
 			usb = <&usb>;
@@ -6891,12 +7007,12 @@ gpufreq: gpufreq {
 		mt-dual,supported_modes = <0>; /* 0: dfp/ufp, 1: dfp, 2: ufp */
 		mt-tcpc,name = "type_c_port0"; /* tcpc_device's name */
 		/* 0: SNK Only, 1: SRC Only, 2: DRP, 3: Try.SRC, 4: Try.SNK */
-		mt-tcpc,role-def = <4>;
+		mt-tcpc,role-def = <5>;
 		mt-tcpc,rp-level = <1>; /* 0: Default, 1: 1.5, 2: 3.0 */
 		/* 0: Never, 1: Always, 2: EMarkOnly, 3: StartOnly */
 		mt-tcpc,vconn-supply  = <1>;
-		mt6360pd,intr-gpio = <&pio 11 0x0>;
-		mt6360pd,intr-gpio-num = <11>;
+		mt6360pd,intr-gpio = <&pio 9 0x0>;
+		mt6360pd,intr-gpio-num = <9>;
 		mt6360pd,pcb-gpio = <&pio 16 0x0>;
 		mt6360pd,pcb-gpio-num = <16>;
 		interrupt-parent = <&subpmic_mtk>;
