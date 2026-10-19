@@ -186,6 +186,7 @@ struct mtk_spi_compatible {
 struct mtk_spi {
 	void __iomem *base;
 	u32 state;
+	/* on gold also the number of chip selects, see mtk_spi_probe() */
 	int pad_num;
 	u32 *pad_sel;
 	struct clk *parent_clk, *sel_clk, *spi_clk;
@@ -1788,6 +1789,13 @@ static int mtk_spi_probe(struct platform_device *pdev)
 		}
 	}
 
+	/*
+	 * gold's touch panels sit on pad-selected chip selects, without
+	 * cs-gpios: one chip select per pad, and MediaTek's check below that
+	 * more than one chip select needs cs-gpios is left out.
+	 */
+	master->num_chipselect = mdata->pad_num;
+
 	platform_set_drvdata(pdev, master);
 	mdata->base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(mdata->base)) {
@@ -1889,12 +1897,7 @@ static int mtk_spi_probe(struct platform_device *pdev)
 			goto err_put_master;
 		}
 
-		if (!master->cs_gpiods && master->num_chipselect > 1) {
-			dev_err(&pdev->dev,
-				"cs_gpiods not specified and num_chipselect > 1\n");
-			ret = -EINVAL;
-			goto err_put_master;
-		}
+		/* no check for cs-gpios: see num_chipselect above */
 	}
 
 	if (mdata->dev_comp->dma_ext)
