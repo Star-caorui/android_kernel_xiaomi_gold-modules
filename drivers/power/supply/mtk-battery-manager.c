@@ -1244,7 +1244,8 @@ static int bs_psy_get_property(struct power_supply *psy,
 			if (!bm->gm2->bat_plug_out)
 				qmax += bm->gm2->algo_qmax;
 
-		val->intval = bs_data->bat_capacity * qmax / 1000;
+		/* qmax is in 0.1 mAh: the remaining charge in uAh, as the property is */
+		val->intval = bs_data->bat_capacity * qmax;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 
@@ -1567,6 +1568,33 @@ static void mtk_battery_external_power_changed(struct power_supply *psy)
 	bm->chr_type = cur_chr_type;
 }
 
+/*
+ * The battery's state of health, in percent: the full charge the gauge has
+ * learned against the design capacity. Android's health service reads it
+ * from state_of_health, which no power supply property provides.
+ */
+static ssize_t state_of_health_show(struct device *dev,
+				    struct device_attribute *attr, char *buf)
+{
+	struct power_supply *psy = dev_get_drvdata(dev);
+	union power_supply_propval full = { 0 }, design = { 0 };
+
+	if (bs_psy_get_property(psy, POWER_SUPPLY_PROP_CHARGE_FULL, &full) ||
+	    bs_psy_get_property(psy, POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN, &design) ||
+	    full.intval <= 0 || design.intval <= 0)
+		return sysfs_emit(buf, "0\n");
+
+	return sysfs_emit(buf, "%lld\n",
+			  clamp_t(long long, (long long)full.intval * 100 / design.intval, 0, 100));
+}
+static DEVICE_ATTR_RO(state_of_health);
+
+static struct attribute *battery_health_attrs[] = {
+	&dev_attr_state_of_health.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(battery_health);
+
 void bm_battery_service_init(struct mtk_battery_manager *bm)
 {
 	struct battery_data *bs_data;
@@ -1584,6 +1612,7 @@ void bm_battery_service_init(struct mtk_battery_manager *bm)
 	bs_data->psd.external_power_changed =
 		mtk_battery_external_power_changed;
 	bs_data->psy_cfg.drv_data = bm;
+	bs_data->psy_cfg.attr_grp = battery_health_groups;
 
 	bs_data->bat_status = POWER_SUPPLY_STATUS_DISCHARGING,
 	bs_data->bat_health = POWER_SUPPLY_HEALTH_GOOD,
