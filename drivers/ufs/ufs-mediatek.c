@@ -38,6 +38,7 @@
 #include "ufs-mediatek-btag.h"
 #include "ufs-mediatek-dbg.h"
 #include "ufs-mediatek-mbrain.h"
+#include "xiaomi/core/ufsctx.h"
 #include "ufs-mediatek-mimic.h"
 #include "ufs-mediatek-priv.h"
 #include "ufs-mediatek-rpmb.h"
@@ -1072,6 +1073,7 @@ static bool ufs_mtk_is_legacy_chipset(struct ufs_hba *hba, u32 hw_ip_ver)
 	switch (hw_ip_ver) {
 	case IP_LEGACY_VER_MT6893:
 	case IP_LEGACY_VER_MT6781:
+	case IP_LEGACY_VER_MT6771:
 		/* can add other legacy chipset ID here accordingly */
 		is_legacy = true;
 		break;
@@ -1880,15 +1882,7 @@ static int ufs_mtk_pre_pwr_change(struct ufs_hba *hba,
 			ret = ufshcd_dme_configure_adapt(hba,
 						   dev_req_params->gear_tx,
 						   PA_INITIAL_ADAPT);
-		} else {
-			ret = ufshcd_dme_configure_adapt(hba,
-				   dev_req_params->gear_tx,
-				   PA_NO_ADAPT);
 		}
-	} else {
-		ret = ufshcd_dme_configure_adapt(hba,
-			   dev_req_params->gear_tx,
-			   PA_NO_ADAPT);
 	}
 
 	return ret;
@@ -2742,6 +2736,8 @@ static void ufs_mtk_event_notify(struct ufs_hba *hba,
 	struct ufs_event_hist *e;
 
 	trace_ufs_mtk_event(evt, val);
+	ufshcd_update_err_state(evt, val);
+	ufshcd_update_uic_error_cnt(evt, val);
 
 
 	/* error check for mbrain */
