@@ -40,8 +40,8 @@ static kgid_t gid = KGIDT_INIT(1000);
 static DEFINE_SEMAPHORE(sem_mutex, 1);
 static int isTimerCancelled;
 
-static unsigned int interval;	/* seconds, 0 : no auto polling */
-static unsigned int trip_temp[10] = { 85000, 80000, 70000, 60000, 50000,
+static unsigned int interval = 2;	/* seconds, 0 : no auto polling */
+static unsigned int trip_temp[10] = { 120000, 80000, 70000, 60000, 50000,
 					40000, 30000, 20000, 10000, 5000 };
 
 static int g_THERMAL_TRIP[10] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
@@ -54,7 +54,7 @@ static struct thermal_cooling_device *cl_dev_sysrst;
 static int mtktspa_debug_log;
 static int kernelmode;
 
-static int num_trip;
+static int num_trip = 1;
 static char g_bind0[20] = "mtktspa-sysrst";
 static char g_bind1[20] = { 0 };
 static char g_bind2[20] = { 0 };
@@ -123,6 +123,7 @@ static unsigned long get_tx_bytes(unsigned long pre_tx_bytes)
 	}
 	return tx_bytes;
 }
+
 
 int tspa_get_MD_tx_tput(void)
 {
@@ -241,6 +242,7 @@ static int mtktspa_get_hw_temp(void)
 	return p_info[i].value;
 }
 
+
 static int mtktspa_get_temp(struct thermal_zone_device *thermal, int *t)
 {
 	*t = mtktspa_get_hw_temp();
@@ -303,6 +305,7 @@ struct thermal_zone_device *thermal, struct thermal_cooling_device *cdev)
 	return 0;
 }
 
+
 static int mtktspa_unbind(
 struct thermal_zone_device *thermal, struct thermal_cooling_device *cdev)
 {
@@ -353,6 +356,7 @@ struct thermal_zone_device *thermal, struct thermal_cooling_device *cdev)
 }
 
 
+
 static int mtktspa_change_mode(
 struct thermal_zone_device *thermal, enum thermal_device_mode mode)
 {
@@ -366,6 +370,7 @@ struct thermal_zone_device *thermal, int *temperature)
 	*temperature = mtktspa_TEMP_CRIT;
 	return 0;
 }
+
 
 /* bind callback functions to thermalzone */
 static struct thermal_zone_device_ops mtktspa_dev_ops = {
@@ -386,6 +391,7 @@ struct thermal_cooling_device *cdev, unsigned long *state)
 	*state = 1;
 	return 0;
 }
+
 
 static int tspa_sysrst_get_cur_state(
 struct thermal_cooling_device *cdev, unsigned long *state)

@@ -58,11 +58,6 @@ thermal_monitor-y += mtk_cooler_cam.o
 thermal_monitor-y += common/thermal_zones/mtk_ts_battery.o
 
 # n85 add thermal ntc file start
-thermal_monitor-y += common/thermal_zones/mtk_wt_cpu.o
-thermal_monitor-y += common/thermal_zones/mtk_wt_bts.o
-thermal_monitor-y += common/thermal_zones/mtk_wt_ltepa.o
-thermal_monitor-y += common/thermal_zones/mtk_wt_charge_ic.o
-thermal_monitor-y += common/thermal_zones/mtk_wt_lcd.o
 # n85 add thermal ntc file end
 
 ifneq ($(CONFIG_POWER_EXT),y)
@@ -72,7 +67,7 @@ endif
 
 thermal_monitor-y += common/thermal_zones/mtk_ts_pa.o
 thermal_monitor-y += common/thermal_zones/mtk_ts_pa_thput.o
-thermal_monitor-y += common/thermal_zones/mtk_ts_charger.o
+thermal_monitor-y += common/thermal_zones/mtk_ts_btscharger.o
 
 
 ifeq ($(strip $(CONFIG_MTK_PLAT_POWER_6853)),)
@@ -211,7 +206,6 @@ thermal_monitor-y += v5/src/mtk_ts_6359vgpu.o
 thermal_monitor-y += v5/src/mtk_ts_6359tsx.o
 thermal_monitor-y += v5/src/mtk_ts_6359dcxo.o
 thermal_monitor-y += common/thermal_zones/mtk_ts_imgsensor.o
-thermal_monitor-y += common/thermal_zones/mtk_ts_btsnrpa.o
 thermal_monitor-y += common/thermal_zones/mtk_ts_dctm.o
 thermal_monitor-y += common/coolers/mtk_cooler_bcct_v1.o
 ifeq ($(CONFIG_MTK_THERMAL_PA_VIA_ATCMD),y)
@@ -223,6 +217,20 @@ thermal_monitor-y += common/thermal_zones/mtk_ts_cpu_noBankv2.o
 thermal_monitor-y += v5/src/mtk_lvts_tc.o
 thermal_monitor-y += v5/src/mtk_tc_wrapper.o
 thermal_monitor-y += v5/src/mtk_pmic_efuse.o
+# gold's own: the CPU zone, the customer coolers and Xiaomi's thermal message node
+thermal_monitor-y += common/thermal_zones/mtk_cs_cpu.o
+thermal_monitor-y += common/coolers/mtk_cooler_gpu_cus.o
+thermal_monitor-y += common/coolers/mtk_cooler_md_cus.o
+thermal_monitor-y += common/coolers/mtk_cooler_char_curr_cus.o
+thermal_monitor-y += common/mi_thermal_message.o
+CFLAGS_common/mi_thermal_message.o += -I$(srctree)
+# gold's 5.10 files, as stock builds them: their warnings under 6.6 do not stop the build
+ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/power/supply/
+CFLAGS_common/mi_thermal_message.o += -Wno-error
+CFLAGS_common/coolers/mtk_cooler_mutt_gen97.o += -Wno-error
+CFLAGS_common/coolers/mtk_cooler_gpu_cus.o += -Wno-error
+CFLAGS_common/coolers/mtk_cooler_md_cus.o += -Wno-error
+CFLAGS_common/coolers/mtk_cooler_char_curr_cus.o += -Wno-error
 endif
 
 ifneq ($(strip $(CONFIG_MTK_PLAT_POWER_6893)),)

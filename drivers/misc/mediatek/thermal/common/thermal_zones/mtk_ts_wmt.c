@@ -111,8 +111,8 @@ static unsigned int tm_wfd_stat;
 static struct task_struct *pg_task;
 
 /* + Cooler info + */
-static int g_num_trip;
-static char g_bind0[20] = { 0 };
+static int g_num_trip = 1;
+static char g_bind0[20] = "mtktswmt-sysrst";
 static char g_bind1[20] = { 0 };
 static char g_bind2[20] = { 0 };
 static char g_bind3[20] = { 0 };
@@ -137,7 +137,7 @@ static int polling_factor2 = 10;
 static unsigned int cl_dev_state;
 static unsigned int cl_pa1_dev_state;
 static unsigned int cl_pa2_dev_state;
-static unsigned int g_trip_temp[COOLER_NUM] = { 125000, 115000, 105000, 85000,
+static unsigned int g_trip_temp[COOLER_NUM] = { 120000, 115000, 105000, 85000,
 							0, 0, 0, 0, 0, 0 };
 
 /* static int g_thro[COOLER_THRO_NUM] =
@@ -198,6 +198,7 @@ static inline int is_wifi_tput_min(void)
 	return (g_limit_tput != -1 && g_limit_tput <= min_wifi_tput) ? 1 : 0;
 }
 
+
 static int wmt_send_signal(int level)
 {
 	int ret = 0;
@@ -239,6 +240,7 @@ static int wmt_send_signal(int level)
 	return ret;
 }
 
+
 static unsigned long
 set_adaptive_wifi_tput_limit(unsigned int cur_tput, unsigned int limit_ratio)
 {
@@ -274,6 +276,7 @@ set_adaptive_wifi_tput_limit(unsigned int cur_tput, unsigned int limit_ratio)
 
 	return limit_tput;
 }
+
 
 static int adaptive_tput_ratio(long prev_temp, long curr_temp)
 {
@@ -355,6 +358,7 @@ static int adaptive_tput_ratio(long prev_temp, long curr_temp)
 
 	return 0;
 }
+
 
 /* extern int cpu_target_tj; // in mtk_ts_cpu.c */
 /* extern int cpu_target_offset; // in mtk_ts_cpu.c */
@@ -465,6 +469,7 @@ static unsigned long get_tx_bytes(unsigned long pre_tx_bytes)
 	return tx_bytes;
 }
 
+
 int tswmt_get_WiFi_tx_tput(void)
 {
 	return tx_throughput;
@@ -525,6 +530,7 @@ static void wmt_cal_stats(struct timer_list *t)
 	//return 0;
 }
 
+
 static int wmt_thz_bind(struct thermal_zone_device *thz_dev,
 			struct thermal_cooling_device *cool_dev)
 {
@@ -580,6 +586,7 @@ static int wmt_thz_bind(struct thermal_zone_device *thz_dev,
 	wmt_tm_dprintk("%s binding OK\n", __func__);
 	return 0;
 }
+
 
 static int wmt_thz_unbind(struct thermal_zone_device *thz_dev,
 			  struct thermal_cooling_device *cool_dev)

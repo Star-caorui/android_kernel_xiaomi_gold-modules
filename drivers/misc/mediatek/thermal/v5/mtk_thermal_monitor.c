@@ -28,6 +28,7 @@
 #include <linux/bug.h>
 #include <linux/workqueue.h>
 #include <linux/slab.h>
+#include <linux/power_supply.h>
 //#include <mt-plat/mtk_thermal_monitor.h>
 //#include <mt-plat/mtk_thermal_platform.h>
 #include "mtk_thermal_monitor.h"
@@ -35,6 +36,7 @@
 #include <linux/uidgid.h>
 #include <gpu_misc.h>
 #include "mtk_thermal_platform_init.h"
+#include <tmp_bts.h>
 /* ************************************ */
 /* Definition */
 /* ************************************ */
@@ -197,6 +199,22 @@ static long _get_current_time_us(void)
 }
 #endif
 
+/* gold: boards with the LN8000 charge pump use the secondary supply's NTCs */
+int get_supply_rank(void)
+{
+	int supply = MAIN_SUPPLY;
+	struct power_supply *psy;
+
+	psy = power_supply_get_by_name("ln8000-charger");
+	if (psy != NULL) {
+		supply = SECONDARY_SUPPLY;
+	}
+
+	THRML_LOG("%s: supply is %d\n", __func__, supply);
+	return supply;
+}
+
+
 static int mtk_thermal_get_tz_idx(char *type)
 {
 	if (strncmp(type, "mtktscpu", 8) == 0)
@@ -239,6 +257,7 @@ static int mtk_thermal_get_tz_idx(char *type)
 	return -1;
 }
 
+
 static struct proc_dir_entry *_get_proc_cooler_dir_entry(void)
 {
 	mutex_lock(&MTM_COOLER_PROC_DIR_LOCK);
@@ -265,6 +284,7 @@ static struct proc_dir_entry *_get_proc_tz_dir_entry(void)
 	return proc_tz_dir_entry;
 }
 
+
 static struct thermal_cooling_device_ops *recoveryClientCooler
 (struct thermal_cooling_device *cdev, struct mtk_thermal_cooler_data **mcdata)
 {
@@ -285,7 +305,6 @@ static struct thermal_zone_device_ops *getClientZoneOps
 		WARN_ON_ONCE(1);
 		return NULL;
 	}
-
 	tzdata = zdev->devdata;
 	mutex_lock(&tzdata->ma_lock);
 	ret = tzdata->ops;
@@ -713,9 +732,12 @@ static int _mtkthermal_tz_read(struct seq_file *m, void *v)
 			int fake_temp = 0;
 
 			tzdata = tz->devdata;
-			if (!tzdata)
+			/* N17 code for HQ-299577 by liunianliang at 2023/6/19 start */
+			if (!tzdata) {
 				WARN_ON_ONCE(1);
-
+				return -ENOMEM;
+			}
+			/* N17 code for HQ-299577 by liunianliang at 2023/6/19 end */
 #if (MAX_STEP_MA_LEN > 1)
 			mutex_lock(&tzdata->ma_lock);
 			ma_len = tzdata->ma_len;
@@ -725,7 +747,6 @@ static int _mtkthermal_tz_read(struct seq_file *m, void *v)
 			seq_printf(m, "%d ", tzdata->ma_lens[0]);
 			{
 				int i = 1;
-
 				for (; i < MAX_STEP_MA_LEN; i++)
 					seq_printf(m, "(%ld,%d) ",
 							tzdata->msma_ht[i - 1],
@@ -782,13 +803,15 @@ static ssize_t _mtkthermal_tz_write
 			struct mtk_thermal_tz_data *tzdata = NULL;
 
 			tzdata = tz->devdata;
-			if (!tzdata)
+			/* N17 code for HQ-299577 by liunianliang at 2023/6/19 start */
+			if (!tzdata) {
 				WARN_ON_ONCE(1);
-
+				return -ENOMEM;
+			}
+			/* N17 code for HQ-299577 by liunianliang at 2023/6/19 end */
 			/* THRML_ERROR_LOG(
 			 * "%s trailing=%s\n", __func__, trailing);
 			 */
-
 			/* reset MA len and lock
 			 */
 #if (MAX_STEP_MA_LEN > 1)
@@ -841,9 +864,12 @@ static ssize_t _mtkthermal_tz_write
 			struct mtk_thermal_tz_data *tzdata = NULL;
 
 			tzdata = tz->devdata;
-			if (!tzdata)
+			/* N17 code for HQ-299577 by liunianliang at 2023/6/19 start */
+			if (!tzdata) {
 				WARN_ON_ONCE(1);
-
+				return -ENOMEM;
+			}
+			/* N17 code for HQ-299577 by liunianliang at 2023/6/19 end */
 			mutex_lock(&tzdata->ma_lock);
 			tzdata->fake_temp = (long)arg_val;
 			mutex_unlock(&tzdata->ma_lock);
@@ -870,7 +896,9 @@ static const struct proc_ops _mtkthermal_tz_fops = {
 	.proc_release = single_release,
 };
 
+#ifndef MIN
 #define MIN(_a_, _b_) ((_a_) < (_b_) ? (_a_) : (_b_))
+#endif
 
 /* No parameter check in this internal function */
 static long _mtkthermal_update_and_get_sma
@@ -1393,7 +1421,6 @@ static int mtk_thermal_get_trip_temp(struct thermal_zone_device *tz, int trip_id
 		WARN_ON_ONCE(1);
 		return -1;
 	}
-
 	tzdata = tz->devdata;
 
 	if (trip_id < tzdata->num_trip  && tzdata->trips != NULL) {
@@ -1699,12 +1726,15 @@ static int mtk_cooling_wrapper_set_cur_state
 				_mtkthermal_check_cooler_conditions(mcdata)) {
 			/* pass */
 		} else {
+			/* N17 code for HQ-299577 by liunianliang at 2023/6/19 start */
+			if (mcdata->tz != NULL) {
 			THRML_LOG(
 				"[.set_cur_state]condition check failed tz_type:%s cdev_type:%s trip:%d state:%lu\n",
 				mcdata->tz->type, cdev->type,
 				mcdata->trip, state);
-
 			state = 0;
+			}
+			/* N17 code for HQ-299577 by liunianliang at 2023/6/19 end */
 		}
 	}
 	list_for_each_entry(instance, &cdev->thermal_instances, cdev_node) {
@@ -2055,7 +2085,6 @@ static int __init thermal_monitor_init(void)
 		mt6359vgpu_init();
 		mt6359tsx_init();
 		mt6359dcxo_init();
-		mtkts_btsnrpa_init();
 		mtktsbattery_init();
 		mtkts_bts_init();
 		mtkts_btsmdpa_init();
@@ -2066,6 +2095,14 @@ static int __init thermal_monitor_init(void)
 		mtkts_dctm_init();
 		//wmt_tm_init();
 		tsallts_init();
+
+		/* N17 code for HQ-296383 by liunianliang at 2023/05/17 start */
+		mtk_cooler_char_curr_init();
+		mtk_cooler_gpu_init();
+		mtk_cooler_md_init();
+		mtkcs_cpu_init();
+		thermal_message_init();
+		/* N17 code for HQ-296383 by liunianliang at 2023/05/17 end */
 		return 0;
 }
 
@@ -2096,7 +2133,6 @@ static void __exit thermal_monitor_exit(void)
 	mt6359vgpu_exit();
 	mt6359tsx_exit();
 	mt6359dcxo_exit();
-	mtkts_btsnrpa_exit();
 	mtktsbattery_exit();
 	mtkts_bts_exit();
 	mtkts_btsmdpa_exit();
