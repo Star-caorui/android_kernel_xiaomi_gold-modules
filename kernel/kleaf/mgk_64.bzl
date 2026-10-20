@@ -5,6 +5,10 @@ load("//kernel_device_modules-6.6:kernel/kleaf/mgk_modules.bzl",
      "mgk_module_user_outs"
 )
 
+load("//kernel_device_modules-6.6:kernel/kleaf/gold_modules.bzl",
+    "gold_device_modules",
+)
+
 load("@mgk_info//:dict.bzl",
     "DEFCONFIG_OVERLAYS",
 )
@@ -3903,4 +3907,19 @@ def get_overlay_modules_list():
         mgk_64_device_modules.remove("drivers/tee/teei/515/isee.ko")
         mgk_64_device_modules.append("drivers/tee/teei/400/isee.ko")
 
+def get_gold_modules_list():
+    # gold's modules are the ones gold's configuration builds; the common modules lose the two
+    # it turns off (Ethernet, and GKI's TEE subsystem: gold's TEE driver is its own)
+    if "gold.config" in DEFCONFIG_OVERLAYS:
+        mgk_64_device_modules.clear()
+        mgk_64_device_modules.extend(gold_device_modules)
+        mgk_64_platform_device_modules.clear()
+        mgk_64_device_user_modules.clear()
+        mgk_64_platform_device_user_modules.clear()
+        for m in ["drivers/net/pcs/pcs_xpcs.ko", "drivers/tee/tee.ko"]:
+            for l in [mgk_64_common_modules, mgk_64_common_eng_modules, mgk_64_common_userdebug_modules, mgk_64_common_user_modules]:
+                if m in l:
+                    l.remove(m)
+
 get_overlay_modules_list()
+get_gold_modules_list()
