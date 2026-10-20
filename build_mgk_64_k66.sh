@@ -47,6 +47,10 @@ fi
 cp -a "${SRC}/${TARGET_DEVICE}_merged_uapi_headers.user/"* "${FINAL_DIST}/"
 
 cp -a "${SRC}/${TARGET_DEVICE}.user/"*.dtb "${FINAL_DIST}/"
+# vendor_boot carries the blob in an Android DT table, as stock's does
+"${ROOT_DIR}/prebuilts/kernel-build-tools/linux-x86/bin/mkdtboimg" create "${FINAL_DIST}/mt6833.dtb.img" \
+    --page_size=2048 "${FINAL_DIST}/mt6833.dtb"
+mv "${FINAL_DIST}/mt6833.dtb.img" "${FINAL_DIST}/mt6833.dtb"
 find "${SRC}/${TARGET_DEVICE}.user/" -name '*.ko' -exec cp -n -t "${FINAL_DIST}/" {} +
 
 echo "MGKI kernel artifacts staged in ${FINAL_DIST}"
