@@ -5257,6 +5257,8 @@ gpufreq: gpufreq {
 		label = "vibrator";
 		min-volt = <3000000>;
 		max-volt = <3000000>;
+		/* the lowest vmax level: gold's motor barely turns below this in short pulses */
+		vmax-min-volt = <2000000>;
 		vib-supply = <&mt6359p_vibr_reg>;
 		};
 
