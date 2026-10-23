@@ -11,9 +11,11 @@
 #include <linux/kernel.h>
 #include <linux/leds.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/regulator/consumer.h>
+#include <linux/sort.h>
 #include <linux/workqueue.h>
 
 #define VIB_DEVICE "regulator_vibrator"
@@ -38,6 +40,11 @@ struct reg_vibr {
 	struct led_classdev vibr_cdev;
 	struct reg_vibr_config vibr_conf;
 	struct notifier_block oc_handle;
+	/* vmax: the strength, as an index into the voltages the regulator can give up to max-volt */
+	struct mutex vmax_lock;
+	int *vmax_volt;
+	int vmax_max;
+	int vmax;
 };
 
 static int mt_vibra_init_config(struct device *dev,
@@ -94,6 +101,110 @@ static int vibr_power_set(struct reg_vibr *vibr)
 
 	return ret;
 }
+
+static int cmp_volt(const void *a, const void *b)
+{
+	return *(const int *)a - *(const int *)b;
+}
+
+/*
+ * The voltages the regulator can give from vmax-min-volt (the lowest the motor
+ * is felt at; without it, the lowest the regulator gives) up to max-volt,
+ * lowest first: one per vmax level.
+ */
+static int vibr_init_vmax(struct device *dev, struct reg_vibr *vibr)
+{
+	struct regulator *reg = vibr->vibr_conf.reg;
+	int count, i, uv, n = 0;
+	u32 floor = 0;
+
+	of_property_read_u32(dev->of_node, "vmax-min-volt", &floor);
+
+	count = regulator_count_voltages(reg);
+	if (count <= 0)
+		return count ? count : -EINVAL;
+
+	vibr->vmax_volt = devm_kcalloc(dev, count, sizeof(int), GFP_KERNEL);
+	if (!vibr->vmax_volt)
+		return -ENOMEM;
+
+	for (i = 0; i < count; i++) {
+		uv = regulator_list_voltage(reg, i);
+		if (uv > 0 && uv >= floor && uv <= vibr->vibr_conf.max_volt)
+			vibr->vmax_volt[n++] = uv;
+	}
+	if (!n)
+		return -EINVAL;
+
+	sort(vibr->vmax_volt, n, sizeof(int), cmp_volt, NULL);
+	for (count = n, n = 1, i = 1; i < count; i++)
+		if (vibr->vmax_volt[i] != vibr->vmax_volt[n - 1])
+			vibr->vmax_volt[n++] = vibr->vmax_volt[i];
+
+	mutex_init(&vibr->vmax_lock);
+	vibr->vmax_max = n - 1;
+	vibr->vmax = n - 1;
+	pr_info("vmax 0-%d: %d-%d uV\n", vibr->vmax_max,
+		vibr->vmax_volt[0], vibr->vmax_volt[vibr->vmax_max]);
+
+	return 0;
+}
+
+static ssize_t vmax_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct led_classdev *cdev = dev_get_drvdata(dev);
+	struct reg_vibr *vibr = container_of(cdev, struct reg_vibr, vibr_cdev);
+
+	return sysfs_emit(buf, "%d\n", vibr->vmax);
+}
+
+static ssize_t vmax_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct led_classdev *cdev = dev_get_drvdata(dev);
+	struct reg_vibr *vibr = container_of(cdev, struct reg_vibr, vibr_cdev);
+	int vmax, ret;
+
+	ret = kstrtoint(buf, 10, &vmax);
+	if (ret)
+		return ret;
+	if (vmax < 0 || vmax > vibr->vmax_max)
+		return -EINVAL;
+
+	mutex_lock(&vibr->vmax_lock);
+	if (vmax != vibr->vmax) {
+		ret = regulator_set_voltage(vibr->vibr_conf.reg,
+			vibr->vmax_volt[vmax], vibr->vmax_volt[vmax]);
+		if (ret < 0)
+			pr_notice("set voltage %d fail, ret = %d\n",
+				vibr->vmax_volt[vmax], ret);
+		else
+			vibr->vmax = vmax;
+	}
+	mutex_unlock(&vibr->vmax_lock);
+
+	return ret < 0 ? ret : size;
+}
+
+static ssize_t vmax_max_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct led_classdev *cdev = dev_get_drvdata(dev);
+	struct reg_vibr *vibr = container_of(cdev, struct reg_vibr, vibr_cdev);
+
+	return sysfs_emit(buf, "%d\n", vibr->vmax_max);
+}
+
+static DEVICE_ATTR_RW(vmax);
+static DEVICE_ATTR_RO(vmax_max);
+
+static struct attribute *vibr_vmax_attrs[] = {
+	&dev_attr_vmax.attr,
+	&dev_attr_vmax_max.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(vibr_vmax);
 
 static void vibr_enable(struct reg_vibr *vibr)
 {
@@ -209,6 +320,10 @@ static int vib_probe(struct platform_device *pdev)
 	}
 
 	m_vibr->vibr_cdev.brightness_set_blocking = regulator_vibrator_set;
+	if (vibr_init_vmax(&pdev->dev, m_vibr))
+		pr_notice("no vmax: cannot list the regulator's voltages\n");
+	else
+		m_vibr->vibr_cdev.groups = vibr_vmax_groups;
 
 	ret = devm_led_classdev_register(&pdev->dev, &m_vibr->vibr_cdev);
 	if (ret < 0) {
