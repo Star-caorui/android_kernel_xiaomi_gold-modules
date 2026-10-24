@@ -5259,6 +5259,8 @@ gpufreq: gpufreq {
 		max-volt = <3000000>;
 		/* the lowest vmax level: gold's motor barely turns below this in short pulses */
 		vmax-min-volt = <2000000>;
+		/* Android's short fallback effects peak for 10 ms, too short for the motor */
+		vmax-top-min-ms = <45>;
 		vib-supply = <&mt6359p_vibr_reg>;
 		};
 
