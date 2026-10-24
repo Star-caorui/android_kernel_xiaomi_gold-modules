@@ -9,6 +9,7 @@
 #include <linux/hrtimer.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
+#include <linux/ktime.h>
 #include <linux/leds.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
@@ -45,6 +46,11 @@ struct reg_vibr {
 	int *vmax_volt;
 	int vmax_max;
 	int vmax;
+	/* a vibration that reaches the top level stays at it, for at least vmax-top-min-ms */
+	struct delayed_work off_work;
+	u32 top_min_ms;
+	bool at_top;
+	ktime_t on_since;
 };
 
 static int mt_vibra_init_config(struct device *dev,
@@ -116,9 +122,10 @@ static int vibr_init_vmax(struct device *dev, struct reg_vibr *vibr)
 {
 	struct regulator *reg = vibr->vibr_conf.reg;
 	int count, i, uv, n = 0;
-	u32 floor = 0;
+	u32 floor = 0, top_min = 0;
 
 	of_property_read_u32(dev->of_node, "vmax-min-volt", &floor);
+	of_property_read_u32(dev->of_node, "vmax-top-min-ms", &top_min);
 
 	count = regulator_count_voltages(reg);
 	if (count <= 0)
@@ -144,10 +151,21 @@ static int vibr_init_vmax(struct device *dev, struct reg_vibr *vibr)
 	mutex_init(&vibr->vmax_lock);
 	vibr->vmax_max = n - 1;
 	vibr->vmax = n - 1;
-	pr_info("vmax 0-%d: %d-%d uV\n", vibr->vmax_max,
-		vibr->vmax_volt[0], vibr->vmax_volt[vibr->vmax_max]);
+	vibr->top_min_ms = top_min;
+	pr_info("vmax 0-%d: %d-%d uV, top held %u ms\n", vibr->vmax_max,
+		vibr->vmax_volt[0], vibr->vmax_volt[vibr->vmax_max], vibr->top_min_ms);
 
 	return 0;
+}
+
+static int vibr_set_vmax_volt(struct reg_vibr *vibr, int vmax)
+{
+	int ret = regulator_set_voltage(vibr->vibr_conf.reg,
+		vibr->vmax_volt[vmax], vibr->vmax_volt[vmax]);
+
+	if (ret < 0)
+		pr_notice("set voltage %d fail, ret = %d\n", vibr->vmax_volt[vmax], ret);
+	return ret;
 }
 
 static ssize_t vmax_show(struct device *dev,
@@ -173,13 +191,22 @@ static ssize_t vmax_store(struct device *dev,
 		return -EINVAL;
 
 	mutex_lock(&vibr->vmax_lock);
-	if (vmax != vibr->vmax) {
-		ret = regulator_set_voltage(vibr->vibr_conf.reg,
-			vibr->vmax_volt[vmax], vibr->vmax_volt[vmax]);
-		if (ret < 0)
-			pr_notice("set voltage %d fail, ret = %d\n",
-				vibr->vmax_volt[vmax], ret);
-		else
+	if (vibr->top_min_ms && atomic_read(&vibr->reg_status) &&
+	    (vmax == vibr->vmax_max || vibr->at_top)) {
+		/*
+		 * Android's short fallback effects for a vibrator without composition put
+		 * their strength in a 10 ms step at the top; an eccentric-mass motor does not
+		 * get going in that, so once a vibration reaches the top it stays there.
+		 */
+		if (!vibr->at_top)
+			ret = vibr_set_vmax_volt(vibr, vibr->vmax_max);
+		if (ret >= 0) {
+			vibr->at_top = true;
+			vibr->vmax = vmax;
+		}
+	} else if (vmax != vibr->vmax) {
+		ret = vibr_set_vmax_volt(vibr, vmax);
+		if (ret >= 0)
 			vibr->vmax = vmax;
 	}
 	mutex_unlock(&vibr->vmax_lock);
@@ -206,9 +233,26 @@ static struct attribute *vibr_vmax_attrs[] = {
 };
 ATTRIBUTE_GROUPS(vibr_vmax);
 
+/* Leave the top level a vibration was held at, for the strength set since. */
+static void vibr_leave_top(struct reg_vibr *vibr)
+{
+	cancel_delayed_work(&vibr->off_work);
+	mutex_lock(&vibr->vmax_lock);
+	if (vibr->at_top) {
+		vibr->at_top = false;
+		vibr_set_vmax_volt(vibr, vibr->vmax);
+	}
+	mutex_unlock(&vibr->vmax_lock);
+}
+
 static void vibr_enable(struct reg_vibr *vibr)
 {
 	pr_info("vibr enable\n");
+
+	if (vibr->top_min_ms) {
+		vibr_leave_top(vibr);
+		vibr->on_since = ktime_get();
+	}
 
 	if (!atomic_read(&vibr->reg_status)) {
 		if (regulator_enable(vibr->vibr_conf.reg))
@@ -224,6 +268,9 @@ static void vibr_disable(struct reg_vibr *vibr)
 {
 	pr_info("vibr disable\n");
 
+	if (vibr->top_min_ms)
+		vibr_leave_top(vibr);
+
 	if (atomic_read(&vibr->reg_status)) {
 		if (regulator_disable(vibr->vibr_conf.reg))
 			pr_notice("set vibr_reg disable failed!\n");
@@ -238,10 +285,30 @@ static void update_vibrator(struct work_struct *work)
 {
 	struct reg_vibr *vibr = container_of(work, struct reg_vibr, vibr_work);
 
+	if (!atomic_read(&vibr->vibr_state)) {
+		s64 left = 0;
+
+		if (vibr->top_min_ms && atomic_read(&vibr->reg_status)) {
+			mutex_lock(&vibr->vmax_lock);
+			if (vibr->at_top)
+				left = vibr->top_min_ms - ktime_ms_delta(ktime_get(), vibr->on_since);
+			mutex_unlock(&vibr->vmax_lock);
+		}
+		if (left > 0)
+			queue_delayed_work(vibr->vibr_queue, &vibr->off_work, msecs_to_jiffies(left));
+		else
+			vibr_disable(vibr);
+	} else {
+		vibr_enable(vibr);
+	}
+}
+
+static void vibr_top_min_end(struct work_struct *work)
+{
+	struct reg_vibr *vibr = container_of(to_delayed_work(work), struct reg_vibr, off_work);
+
 	if (!atomic_read(&vibr->vibr_state))
 		vibr_disable(vibr);
-	else
-		vibr_enable(vibr);
 }
 
 static int regulator_vibrator_set(struct led_classdev *led_cdev, enum led_brightness value)
@@ -305,6 +372,7 @@ static int vib_probe(struct platform_device *pdev)
 	}
 
 	INIT_WORK(&m_vibr->vibr_work, update_vibrator);
+	INIT_DELAYED_WORK(&m_vibr->off_work, vibr_top_min_end);
 	atomic_set(&m_vibr->vibr_shutdown, 0);
 
 	if (regulator_is_enabled(m_vibr->vibr_conf.reg))
@@ -371,6 +439,7 @@ static int vib_remove(struct platform_device *pdev)
 	struct reg_vibr *vibr = platform_get_drvdata(pdev);
 
 	cancel_work_sync(&vibr->vibr_work);
+	cancel_delayed_work_sync(&vibr->off_work);
 	devm_led_classdev_unregister(&pdev->dev, &vibr->vibr_cdev);
 
 	return 0;
