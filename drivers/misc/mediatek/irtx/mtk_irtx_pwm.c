@@ -207,6 +207,8 @@ static int mtk_pwm_ir_probe(struct platform_device *pdev)
 		&pwm_ir->pwm_data_invert);
 
 	pwm_ir->pdev = pdev;
+	pwm_ir->cycle = 3;
+	pwm_ir->duty_cycle = 1;
 
 	rcdev = devm_rc_allocate_device(&pdev->dev, RC_DRIVER_IR_RAW_TX);
 	if (!rcdev)
