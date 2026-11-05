@@ -695,10 +695,12 @@ static enum power_supply_property usb_psy_properties[] = {
 };
 
 /*
- * What the charger gives now, for Android's charging speed: the PD
- * contract (with PPS, what PE5 last asked for), else 5 V (9 V on HVDCP)
- * at the main charger's input current limit. Nothing while the primary
- * charger is offline, or before the driver has looked everything up.
+ * What the charger offers, for Android's charging speed: on PPS the
+ * most the selected PPS offer allows (PE5's requests start low and
+ * follow the battery, so its contract would make the speed flicker),
+ * else the PD contract, else 5 V (9 V on HVDCP) at the main charger's
+ * input current limit. Nothing while the primary charger is offline,
+ * or before the driver has looked everything up.
  */
 static void usb_psy_get_power(struct sysfs_desc *desc, int *uv, int *ua)
 {
@@ -717,6 +719,16 @@ static void usb_psy_get_power(struct sysfs_desc *desc, int *uv, int *ua)
 	if (desc->tcpc &&
 	    tcpm_inquire_pd_contract(desc->tcpc, &mv, &ma) == TCPM_SUCCESS &&
 	    mv > 0 && ma > 0) {
+		struct tcpm_power_cap_val cap;
+
+		if (tcpm_inquire_select_source_cap(desc->tcpc, &cap) ==
+			    TCPM_SUCCESS &&
+		    cap.type == TCPM_POWER_CAP_VAL_TYPE_AUGMENT &&
+		    (cap.apdo_type & TCPM_APDO_TYPE_MASK) ==
+			    TCPM_POWER_CAP_APDO_TYPE_PPS) {
+			mv = cap.max_mv;
+			ma = cap.ma;
+		}
 		*uv = mv * 1000;
 		*ua = ma * 1000;
 		return;
